@@ -25,4 +25,5 @@ public sealed class EsiStatus
     public int players { get; set; }
     public string server_version { get; set; } = "";
     public DateTime start_time { get; set; }
+
 }

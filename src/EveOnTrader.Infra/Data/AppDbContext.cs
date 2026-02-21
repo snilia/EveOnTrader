@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<MarketOrder>(e =>
         {
             e.HasKey(x => x.OrderId);
+            e.Property(x => x.OrderId).ValueGeneratedNever();
 
             // Optional but recommended: keep RegionId + TypeId queries fast later
             e.HasIndex(x => x.RegionId);

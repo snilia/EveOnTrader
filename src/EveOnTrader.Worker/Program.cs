@@ -1,4 +1,9 @@
 ﻿using System.Net.Http.Json;
+using EveOnTrader.Infra;
+using EveOnTrader.Infra.Data;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 
 Console.WriteLine("Calling EVE ESI...");
 
@@ -20,6 +25,24 @@ Console.WriteLine($"Players online: {status.players}");
 Console.WriteLine($"Server version: {status.server_version}");
 Console.WriteLine($"Start time:     {status.start_time}");
 
+
+
+
+var builder = Host.CreateApplicationBuilder(args);
+
+// register DbContext (SQLite)
+builder.Services.AddInfra("Data Source=eve.db");
+
+using var host = builder.Build();
+using var scope = host.Services.CreateScope();
+
+var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+// B6: create DB + tables if missing
+await db.Database.EnsureCreatedAsync();
+
+Console.WriteLine("SQLite DB ensured (created if it didn't exist).");
+
 public sealed class EsiStatus
 {
     public int players { get; set; }
@@ -27,3 +50,6 @@ public sealed class EsiStatus
     public DateTime start_time { get; set; }
 
 }
+
+
+

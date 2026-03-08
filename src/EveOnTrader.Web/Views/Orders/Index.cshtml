@@ -1,0 +1,33 @@
+﻿@model List<EveOnTrader.Core.Models.MarketOrder>
+
+@{
+    ViewBag.Title = "Orders";
+}
+
+<h2>Recent Orders (Top 200)</h2>
+
+<table class="table table-striped table-sm">
+    <thead>
+        <tr>
+            <th>Issued</th>
+            <th>TypeId</th>
+            <th>Price</th>
+            <th>Vol Remain</th>
+            <th>LocationId</th>
+            <th>RegionId</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var o in Model)
+        {
+            <tr>
+                <td>@o.Issued</td>
+                <td>@o.TypeId</td>
+                <td>@o.Price</td>
+                <td>@o.VolumeRemain</td>
+                <td>@o.LocationId</td>
+                <td>@o.RegionId</td>
+            </tr>
+        }
+    </tbody>
+</table>

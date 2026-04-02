@@ -19,7 +19,7 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.OrderId);
             e.Property(x => x.OrderId).ValueGeneratedNever();
 
-            // Optional but recommended: keep RegionId + TypeId queries fast later
+            //keep RegionId + TypeId queries fast later
             e.HasIndex(x => x.RegionId);
             e.HasIndex(x => x.TypeId);
             e.HasIndex(x => x.LocationId);

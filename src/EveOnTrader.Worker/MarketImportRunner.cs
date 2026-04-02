@@ -38,6 +38,7 @@ public class MarketImportRunner
 
         long totalInserted = 0;
         long totalPages = 1;
+        var seenOrderIds = new HashSet<long>();
 
         for (var page = 1; page <= totalPages; page++)
         {
@@ -56,17 +57,21 @@ public class MarketImportRunner
                 o.RegionId = RegionId;
             }
 
-            _db.MarketOrders.AddRange(orders);
+            var newOrders = orders
+                .Where(o => seenOrderIds.Add(o.OrderId))
+                .ToList();
+
+            _db.MarketOrders.AddRange(newOrders);
             await _db.SaveChangesAsync();
 
-            totalInserted += orders.Count;
+            totalInserted += newOrders.Count;
 
 
             //cleares tracked entities from EF memory, helps with big imports
             _db.ChangeTracker.Clear();
 
             //print progress
-            Console.WriteLine($"Page {page}/{totalPages}: inserted {orders.Count:n0} (total {totalInserted:n0})");
+            Console.WriteLine($"Page {page}/{totalPages}: inserted {newOrders.Count:n0} (raw {orders.Count:n0}, total {totalInserted:n0})");
         }
 
         //stops stopwatch

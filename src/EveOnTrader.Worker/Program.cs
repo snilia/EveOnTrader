@@ -1,5 +1,6 @@
 ﻿using EveOnTrader.Infra;
 using EveOnTrader.Worker;
+using EveOnTrader.Worker.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,8 @@ builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogL
 // Register Infra (DbContext configured for SQLite)
 builder.Services.AddInfra(connStr);
 
-// Register the runner
+// Register Worker services
+builder.Services.AddTransient<UniverseNameSyncService>();
 builder.Services.AddTransient<MarketImportRunner>();
 
 using var host = builder.Build();

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using EveOnTrader.Core.Models;
 using EveOnTrader.Infra.Data;
+using EveOnTrader.Worker.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveOnTrader.Worker;
@@ -14,10 +15,12 @@ public class MarketImportRunner
     private const string CompatibilityDate = "2025-12-16";
 
     private readonly AppDbContext _db;
+    private readonly UniverseNameSyncService _universeNameSyncService;
 
-    public MarketImportRunner(AppDbContext db)
+    public MarketImportRunner(AppDbContext db, UniverseNameSyncService universeNameSyncService)
     {
         _db = db;
+        _universeNameSyncService = universeNameSyncService;
     }
 
     public async Task RunAsync(string dbPath)
@@ -26,6 +29,22 @@ public class MarketImportRunner
         Console.WriteLine("Ensuring DB exists...");
         await _db.Database.EnsureCreatedAsync();
 
+        var sw = Stopwatch.StartNew();
+
+        var totalInserted = await ImportMarketOrdersAsync();
+        var typeRefsInserted = await _universeNameSyncService.SyncItemTypeRefsAsync();
+
+        sw.Stop();
+
+        Console.WriteLine();
+        Console.WriteLine("DONE.");
+        Console.WriteLine($"Inserted {totalInserted:n0} sell orders for region {RegionId}.");
+        Console.WriteLine($"Inserted {typeRefsInserted:n0} new item type names.");
+        Console.WriteLine($"Total elapsed: {sw.Elapsed}.");
+    }
+
+    private async Task<long> ImportMarketOrdersAsync()
+    {
         Console.WriteLine("Clearing MarketOrders (fresh snapshot)...");
         await _db.Database.ExecuteSqlRawAsync("DELETE FROM MarketOrders");
 
@@ -33,8 +52,6 @@ public class MarketImportRunner
         _db.ChangeTracker.AutoDetectChangesEnabled = false;
 
         using var http = CreateHttpClient();
-
-        var sw = Stopwatch.StartNew();
 
         long totalInserted = 0;
         long totalPages = 1;
@@ -66,19 +83,13 @@ public class MarketImportRunner
 
             totalInserted += newOrders.Count;
 
-
             //cleares tracked entities from EF memory, helps with big imports
             _db.ChangeTracker.Clear();
 
-            //print progress
             Console.WriteLine($"Page {page}/{totalPages}: inserted {newOrders.Count:n0} (raw {orders.Count:n0}, total {totalInserted:n0})");
         }
 
-        //stops stopwatch
-        sw.Stop();
-
-        //final summary
-        Console.WriteLine($"DONE. Inserted {totalInserted:n0} sell orders for region {RegionId} in {sw.Elapsed}.");
+        return totalInserted;
     }
 
     private static HttpClient CreateHttpClient()
@@ -94,6 +105,8 @@ public class MarketImportRunner
         http.DefaultRequestHeaders.TryAddWithoutValidation(
             "X-Compatibility-Date",
             CompatibilityDate);
+
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("EveOnTrader.Worker/1.0");
 
         return http;
     }

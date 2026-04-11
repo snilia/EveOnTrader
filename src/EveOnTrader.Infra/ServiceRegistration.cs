@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using EveOnTrader.Infra.Data;
+using EveOnTrader.Infra.Queries;
 
 namespace EveOnTrader.Infra;
 
@@ -10,6 +11,8 @@ public static class ServiceRegistration
     {
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlite(sqliteConnectionString));
+
+        services.AddScoped<OrderQueryService>();
 
         return services;
     }

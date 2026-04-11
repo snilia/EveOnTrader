@@ -7,6 +7,6 @@ public class OrderListRow
     public DateTime Issued { get; set; }
     public string TypeName { get; set; } = "";
     public decimal Price { get; set; }
-    public int VolumeRemain { get; set; }
-    public int VolumeTotal { get; set; }
+    public long VolumeRemain { get; set; }
+    public long VolumeTotal { get; set; }
 }

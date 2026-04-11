@@ -1,28 +1,21 @@
-﻿using EveOnTrader.Infra.Data;
+﻿using EveOnTrader.Infra.Queries;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace EveOnTrader.Web.Controllers;
 
 public class OrdersController : Controller
 {
-    private readonly AppDbContext _db;
+    private readonly OrderQueryService _orderQueryService;
 
-    public OrdersController(AppDbContext db)
+    public OrdersController(OrderQueryService orderQueryService)
     {
-        _db = db;
+        _orderQueryService = orderQueryService;
     }
 
     // GET: /Orders
     public async Task<IActionResult> Index()
     {
-        // Pull a small, recent slice so we don’t load huge tables into memory.
-        var rows = await _db.MarketOrders
-            .AsNoTracking()  //readonly, faster queries
-            .OrderByDescending(o => o.Issued)
-            .Take(200)
-            .ToListAsync();
-
+        var rows = await _orderQueryService.GetLatestSellOrdersAsync(200);
         return View(rows);
     }
 }

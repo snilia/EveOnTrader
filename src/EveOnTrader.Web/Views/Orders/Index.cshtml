@@ -1,4 +1,4 @@
-﻿@model List<EveOnTrader.Core.Models.MarketOrder>
+﻿@model List<EveOnTrader.Core.ReadModels.OrderListRow>
 
 @{
     ViewBag.Title = "Orders";
@@ -10,11 +10,12 @@
     <thead>
         <tr>
             <th>Issued</th>
-            <th>TypeId</th>
+            <th>Type</th>
             <th>Price</th>
             <th>Vol Remain</th>
+            <th>Vol Total</th>
             <th>LocationId</th>
-            <th>RegionId</th>
+            <th>OrderId</th>
         </tr>
     </thead>
     <tbody>
@@ -22,11 +23,12 @@
         {
             <tr>
                 <td>@o.Issued</td>
-                <td>@o.TypeId</td>
+                <td>@o.TypeName</td>
                 <td>@o.Price</td>
                 <td>@o.VolumeRemain</td>
+                <td>@o.VolumeTotal</td>
                 <td>@o.LocationId</td>
-                <td>@o.RegionId</td>
+                <td>@o.OrderId</td>
             </tr>
         }
     </tbody>

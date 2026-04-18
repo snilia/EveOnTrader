@@ -25,6 +25,7 @@ builder.Services.AddInfra(connStr);
 
 // Register Worker services
 builder.Services.AddTransient<ItemTypeNameSyncService>();
+builder.Services.AddTransient<UniverseEntityNameSyncService>();
 builder.Services.AddTransient<MarketImportRunner>();
 
 using var host = builder.Build();

@@ -11,10 +11,12 @@
         <tr>
             <th>Issued</th>
             <th>Type</th>
+            <th>Region</th>
+            <th>System</th>
+            <th>Location</th>
             <th>Price</th>
             <th>Vol Remain</th>
             <th>Vol Total</th>
-            <th>LocationId</th>
             <th>OrderId</th>
         </tr>
     </thead>
@@ -24,10 +26,12 @@
             <tr>
                 <td>@o.Issued</td>
                 <td>@o.TypeName</td>
+                <td>@o.RegionName</td>
+                <td>@o.SystemName</td>
+                <td>@o.LocationName</td>
                 <td>@o.Price</td>
                 <td>@o.VolumeRemain</td>
                 <td>@o.VolumeTotal</td>
-                <td>@o.LocationId</td>
                 <td>@o.OrderId</td>
             </tr>
         }

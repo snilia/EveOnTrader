@@ -15,12 +15,12 @@ public class MarketImportRunner
     private const string CompatibilityDate = "2025-12-16";
 
     private readonly AppDbContext _db;
-    private readonly UniverseNameSyncService _universeNameSyncService;
+    private readonly ItemTypeNameSyncService _itemTypeNameSyncService;
 
-    public MarketImportRunner(AppDbContext db, UniverseNameSyncService universeNameSyncService)
+    public MarketImportRunner(AppDbContext db, ItemTypeNameSyncService itemTypeNameSyncService)
     {
         _db = db;
-        _universeNameSyncService = universeNameSyncService;
+        _itemTypeNameSyncService = itemTypeNameSyncService;
     }
 
     public async Task RunAsync(string dbPath)
@@ -32,7 +32,7 @@ public class MarketImportRunner
         var sw = Stopwatch.StartNew();
 
         var totalInserted = await ImportMarketOrdersAsync();
-        var typeRefsInserted = await _universeNameSyncService.SyncItemTypeRefsAsync();
+        var typeRefsInserted = await _itemTypeNameSyncService.SyncItemTypeRefsAsync();
 
         sw.Stop();
 

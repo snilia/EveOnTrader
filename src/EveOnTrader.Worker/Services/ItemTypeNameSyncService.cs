@@ -8,16 +8,16 @@ using Microsoft.EntityFrameworkCore;
 namespace EveOnTrader.Worker.Services;
 
 
-//UniverseNameSyncService is a worker-side sync service that finds item IDs missing from ItemTypeRefs, 
+//ItemTypeNameSyncService is a worker-side sync service that finds item IDs missing from ItemTypeRefs, 
 //resolves their names from ESI in batches, and saves them into the database.
-public class UniverseNameSyncService
+public class ItemTypeNameSyncService
 {
     private const string CompatibilityDate = "2025-12-16";
     private const int BatchSize = 500;
 
     private readonly AppDbContext _db;
 
-    public UniverseNameSyncService(AppDbContext db)
+    public ItemTypeNameSyncService(AppDbContext db)
     {
         _db = db;
     }

@@ -22,16 +22,16 @@ public class OrderQueryService
                 on o.TypeId equals t.TypeId into typeRefs
             from t in typeRefs.DefaultIfEmpty()
 
-            join region in _db.UniverseEntityRefs.AsNoTracking()
-                on (long)o.RegionId equals region.EntityId into regionRefs
+            join region in _db.Regions.AsNoTracking()
+                on o.RegionId equals region.RegionId into regionRefs
             from region in regionRefs.DefaultIfEmpty()
 
-            join system in _db.UniverseEntityRefs.AsNoTracking()
-                on o.SystemId equals system.EntityId into systemRefs
+            join system in _db.SolarSystems.AsNoTracking()
+                on o.SystemId equals system.SolarSystemId into systemRefs
             from system in systemRefs.DefaultIfEmpty()
 
-            join location in _db.UniverseEntityRefs.AsNoTracking()
-                on o.LocationId equals location.EntityId into locationRefs
+            join location in _db.MarketLocations.AsNoTracking()
+                on o.LocationId equals location.LocationId into locationRefs
             from location in locationRefs.DefaultIfEmpty()
 
             orderby o.Issued descending

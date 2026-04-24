@@ -2,6 +2,6 @@
 
 public class Region
 {
-    public int RegionId { get; set; }
+    public long RegionId { get; set; }
     public string Name { get; set; } = "";
 }

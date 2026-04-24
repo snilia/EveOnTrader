@@ -3,7 +3,7 @@
 public class MarketLocation
 {
     public long LocationId { get; set; }
-    public int SolarSystemId { get; set; }
+    public long SolarSystemId { get; set; }
     public string Name { get; set; } = "";
     public KindValue Kind { get; set; }
     public bool? HasPublicDocking { get; set; }

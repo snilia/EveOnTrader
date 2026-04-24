@@ -27,6 +27,7 @@ builder.Services.AddInfra(connStr);
 builder.Services.AddTransient<ItemTypeNameSyncService>();
 builder.Services.AddTransient<UniverseEntityNameSyncService>();
 builder.Services.AddTransient<MarketImportRunner>();
+builder.Services.AddTransient<UniverseSyncService>();   
 
 using var host = builder.Build();
 using var scope = host.Services.CreateScope();

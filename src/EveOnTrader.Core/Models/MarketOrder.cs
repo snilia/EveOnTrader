@@ -41,5 +41,5 @@ public class MarketOrder
     public string Range { get; set; } = "";
 
     // your internal field, not from ESI:
-    public int RegionId { get; set; }
+    public long RegionId { get; set; }
 }

@@ -123,6 +123,7 @@ public class UniverseSyncService
 
         var constellationRegionMap = new Dictionary<long, long>();
         var systemsToInsert = new List<SolarSystem>();
+        var processed = 0;
 
         foreach (var solarSystemId in missingSolarSystemIds)
         {
@@ -163,6 +164,13 @@ public class UniverseSyncService
                 Name = systemResult.Name,
                 SecurityStatus = systemResult.SecurityStatus
             });
+
+            processed++;
+
+            if (processed % 100 == 0 || processed == missingSolarSystemIds.Count)
+            {
+                Console.WriteLine($"Resolved {processed:n0}/{missingSolarSystemIds.Count:n0} solar systems...");
+            }
         }
 
         if (systemsToInsert.Count == 0)

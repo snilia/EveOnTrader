@@ -16,19 +16,16 @@ public class MarketImportRunner
 
     private readonly AppDbContext _db;
     private readonly ItemTypeNameSyncService _itemTypeNameSyncService;
-    private readonly UniverseEntityNameSyncService _universeEntityNameSyncService;
     private readonly UniverseSyncService _universeSyncService;
 
 
     public MarketImportRunner(
         AppDbContext db,
         ItemTypeNameSyncService itemTypeNameSyncService,
-        UniverseEntityNameSyncService universeEntityNameSyncService,
         UniverseSyncService universeSyncService)
     {
         _db = db;
         _itemTypeNameSyncService = itemTypeNameSyncService;
-        _universeEntityNameSyncService = universeEntityNameSyncService;
         _universeSyncService = universeSyncService;
     }
 
@@ -44,7 +41,6 @@ public class MarketImportRunner
         var totalInserted = await ImportMarketOrdersAsync();
         var marketLocationsInserted = await _universeSyncService.SyncMarketLocationsAsync();
         var typeRefsInserted = await _itemTypeNameSyncService.SyncItemTypeRefsAsync();
-        var universeEntityRefsInserted = await _universeEntityNameSyncService.SyncUniverseEntityRefsAsync();
 
         sw.Stop();
 
@@ -55,7 +51,6 @@ public class MarketImportRunner
         Console.WriteLine($"Inserted {totalInserted:n0} sell orders for region {RegionId}.");
         Console.WriteLine($"Inserted {marketLocationsInserted:n0} new market locations.");
         Console.WriteLine($"Inserted {typeRefsInserted:n0} new item type names.");
-        Console.WriteLine($"Inserted {universeEntityRefsInserted:n0} new universe entity names.");
         Console.WriteLine($"Total elapsed: {sw.Elapsed}.");
     }
 

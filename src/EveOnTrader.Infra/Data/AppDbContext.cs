@@ -9,7 +9,6 @@ public class AppDbContext : DbContext
 
     public DbSet<MarketOrder> MarketOrders => Set<MarketOrder>();
     public DbSet<ItemTypeRef> ItemTypeRefs => Set<ItemTypeRef>();
-    public DbSet<UniverseEntityRef> UniverseEntityRefs => Set<UniverseEntityRef>();
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<SolarSystem> SolarSystems => Set<SolarSystem>();
     public DbSet<MarketLocation> MarketLocations => Set<MarketLocation>();
@@ -33,20 +32,6 @@ public class AppDbContext : DbContext
         {
             e.HasKey(x => x.TypeId);
             e.Property(x => x.TypeId).ValueGeneratedNever();
-
-            e.Property(x => x.Name)
-                .IsRequired()
-                .HasMaxLength(300);
-        });
-
-        modelBuilder.Entity<UniverseEntityRef>(e =>
-        {
-            e.HasKey(x => x.EntityId);
-            e.Property(x => x.EntityId).ValueGeneratedNever();
-
-            e.Property(x => x.Category)
-                .IsRequired()
-                .HasMaxLength(100);
 
             e.Property(x => x.Name)
                 .IsRequired()

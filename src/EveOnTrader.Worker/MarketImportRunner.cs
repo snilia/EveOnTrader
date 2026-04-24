@@ -97,7 +97,7 @@ public class MarketImportRunner
 
         return totalInserted;
     }
-
+    
     private static HttpClient CreateHttpClient()
     {
         var http = new HttpClient

@@ -10,6 +10,9 @@ public class AppDbContext : DbContext
     public DbSet<MarketOrder> MarketOrders => Set<MarketOrder>();
     public DbSet<ItemTypeRef> ItemTypeRefs => Set<ItemTypeRef>();
     public DbSet<UniverseEntityRef> UniverseEntityRefs => Set<UniverseEntityRef>();
+    public DbSet<Region> Regions => Set<Region>();
+    public DbSet<SolarSystem> SolarSystems => Set<SolarSystem>();
+    public DbSet<MarketLocation> MarketLocations => Set<MarketLocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,5 +52,40 @@ public class AppDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(300);
         });
+
+        modelBuilder.Entity<Region>(e =>
+        {
+            e.HasKey(x => x.RegionId);
+            e.Property(x => x.RegionId).ValueGeneratedNever();
+
+            e.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(300);
+        });
+
+        modelBuilder.Entity<SolarSystem>(e =>
+        {
+            e.HasKey(x => x.SolarSystemId);
+            e.Property(x => x.SolarSystemId).ValueGeneratedNever();
+
+            e.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(300);
+
+            e.HasIndex(x => x.RegionId);
+        });
+
+        modelBuilder.Entity<MarketLocation>(e =>
+        {
+            e.HasKey(x => x.LocationId);
+            e.Property(x => x.LocationId).ValueGeneratedNever();
+
+            e.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(300);
+
+            e.HasIndex(x => x.SolarSystemId);
+        });
+
     }
 }

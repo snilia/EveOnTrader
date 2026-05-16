@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using EveOnTrader.Core.Models;
@@ -13,6 +14,16 @@ public class MarketImportRunner
 {
     private const string OrderType = "sell";
     private const string CompatibilityDate = "2025-12-16";
+    private const int MaxRequestAttempts = 5;
+
+    private static readonly TimeSpan[] RetryDelays =
+    [
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(20),
+        TimeSpan.FromSeconds(30)
+    ];
 
     private readonly AppDbContext _db;
     private readonly ItemTypeNameSyncService _itemTypeNameSyncService;
@@ -80,9 +91,7 @@ public class MarketImportRunner
             for (var page = 1; page <= totalPages; page++)
             {
                 var url = $"markets/{regionId}/orders/?order_type={OrderType}&datasource=tranquility&page={page}";
-                using var resp = await http.GetAsync(url);
-
-                resp.EnsureSuccessStatusCode();
+                using var resp = await GetWithRetryAsync(http, url, regionId, page);
 
                 totalPages = long.Parse(resp.Headers.GetValues("X-Pages").First());
 
@@ -112,6 +121,88 @@ public class MarketImportRunner
         }
 
         return totalInserted;
+    }
+
+    private async Task<HttpResponseMessage> GetWithRetryAsync(HttpClient http, string url, long regionId, int page)
+    {
+        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
+        {
+            try
+            {
+                var resp = await http.GetAsync(url);
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    if (IsRetriableStatusCode(resp.StatusCode) && attempt < MaxRequestAttempts)
+                    {
+                        var delay = GetRetryDelay(resp, attempt);
+
+                        Console.WriteLine(
+                            $"Region {regionId} page {page}: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
+
+                        resp.Dispose();
+                        await Task.Delay(delay);
+                        continue;
+                    }
+
+                    try
+                    {
+                        resp.EnsureSuccessStatusCode();
+                    }
+                    catch
+                    {
+                        resp.Dispose();
+                        throw;
+                    }
+                }
+
+                return resp;
+            }
+            catch (HttpRequestException ex) when (attempt < MaxRequestAttempts)
+            {
+                var delay = GetRetryDelay(attempt);
+
+                Console.WriteLine(
+                    $"Region {regionId} page {page}: request failed: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
+
+                await Task.Delay(delay);
+            }
+            catch (TaskCanceledException ex) when (attempt < MaxRequestAttempts)
+            {
+                var delay = GetRetryDelay(attempt);
+
+                Console.WriteLine(
+                    $"Region {regionId} page {page}: request timed out: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
+
+                await Task.Delay(delay);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Request retry loop ended unexpectedly for region {regionId} page {page}.");
+    }
+
+    private static bool IsRetriableStatusCode(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+    }
+
+    private static TimeSpan GetRetryDelay(int attempt)
+    {
+        var index = Math.Min(attempt - 1, RetryDelays.Length - 1);
+        return RetryDelays[index];
+    }
+
+    private static TimeSpan GetRetryDelay(HttpResponseMessage resp, int attempt)
+    {
+        var retryAfter = resp.Headers.RetryAfter?.Delta;
+
+        if (retryAfter is not null && retryAfter.Value > TimeSpan.Zero)
+        {
+            return retryAfter.Value;
+        }
+
+        return GetRetryDelay(attempt);
     }
 
     private static HttpClient CreateHttpClient()

@@ -91,7 +91,7 @@ public class MarketImportRunner
             for (var page = 1; page <= totalPages; page++)
             {
                 var url = $"markets/{regionId}/orders/?order_type={OrderType}&datasource=tranquility&page={page}";
-                using var resp = await GetWithRetryAsync(http, url, regionId, page);
+                using var resp = await _esiClient.GetAsync(url, $"region {regionId} page {page}");
 
                 totalPages = long.Parse(resp.Headers.GetValues("X-Pages").First());
 

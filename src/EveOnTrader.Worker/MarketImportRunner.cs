@@ -184,7 +184,9 @@ public class MarketImportRunner
 
     private static bool IsRetriableStatusCode(HttpStatusCode statusCode)
     {
-        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+        return (int)statusCode == 420 ||
+               statusCode == HttpStatusCode.TooManyRequests ||
+               (int)statusCode >= 500;
     }
 
     private static TimeSpan GetRetryDelay(int attempt)

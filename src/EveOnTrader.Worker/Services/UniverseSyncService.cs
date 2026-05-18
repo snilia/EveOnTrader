@@ -1,6 +1,4 @@
-﻿using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using EveOnTrader.Core.Models;
 using EveOnTrader.Infra.Data;
 using EveOnTrader.Worker.Models;
@@ -8,28 +6,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveOnTrader.Worker.Services;
 
+// UniverseSyncService seeds and fills typed universe reference tables needed by worker and web queries.
 public class UniverseSyncService
 {
-    private const string CompatibilityDate = "2025-12-16";
     private const int BatchSize = 500;
-    private const int MaxRequestAttempts = 5;
-
-    private static readonly TimeSpan[] RetryDelays =
-    [
-        TimeSpan.FromSeconds(2),
-        TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(20),
-        TimeSpan.FromSeconds(30)
-    ];
 
     private readonly AppDbContext _db;
+    private readonly EsiClient _esiClient;
 
-    public UniverseSyncService(AppDbContext db)
+    // Creates universe sync service with DB access and shared ESI client.
+    public UniverseSyncService(AppDbContext db, EsiClient esiClient)
     {
         _db = db;
+        _esiClient = esiClient;
     }
 
+    // Syncs regions and solar systems needed for core universe reference data.
     public async Task<(int RegionsInserted, int SolarSystemsInserted)> SyncAsync()
     {
         var regionsInserted = await SyncRegionsAsync();
@@ -38,13 +30,12 @@ public class UniverseSyncService
         return (regionsInserted, solarSystemsInserted);
     }
 
+    // Downloads missing regions from ESI and saves their IDs and names into Regions.
     public async Task<int> SyncRegionsAsync()
     {
         Console.WriteLine("Checking regions...");
 
-        using var http = CreateHttpClient();
-        using var regionIdsResp = await GetWithRetryAsync(
-            http,
+        using var regionIdsResp = await _esiClient.GetAsync(
             "universe/regions/?datasource=tranquility",
             "region list");
 
@@ -72,8 +63,7 @@ public class UniverseSyncService
 
         foreach (var batch in Batch(missingRegionIds, BatchSize))
         {
-            using var resp = await PostAsJsonWithRetryAsync(
-                http,
+            using var resp = await _esiClient.PostAsJsonAsync(
                 "universe/names/?datasource=tranquility",
                 batch,
                 $"region names batch ({batch.Count:n0} ids)");
@@ -108,13 +98,12 @@ public class UniverseSyncService
         return regionsToInsert.Count;
     }
 
+    // Downloads missing solar systems from ESI, resolves their region IDs, and saves them into SolarSystems.
     public async Task<int> SyncSolarSystemsAsync()
     {
         Console.WriteLine("Checking solar systems...");
 
-        using var http = CreateHttpClient();
-        using var solarSystemIdsResp = await GetWithRetryAsync(
-            http,
+        using var solarSystemIdsResp = await _esiClient.GetAsync(
             "universe/systems/?datasource=tranquility",
             "solar system list");
 
@@ -144,8 +133,7 @@ public class UniverseSyncService
 
         foreach (var solarSystemId in missingSolarSystemIds)
         {
-            using var systemResp = await GetWithRetryAsync(
-                http,
+            using var systemResp = await _esiClient.GetAsync(
                 $"universe/systems/{solarSystemId}/?datasource=tranquility",
                 $"solar system {solarSystemId}");
 
@@ -158,8 +146,7 @@ public class UniverseSyncService
 
             if (!constellationRegionMap.TryGetValue(systemResult.ConstellationId, out var regionId))
             {
-                using var constellationResp = await GetWithRetryAsync(
-                    http,
+                using var constellationResp = await _esiClient.GetAsync(
                     $"universe/constellations/{systemResult.ConstellationId}/?datasource=tranquility",
                     $"constellation {systemResult.ConstellationId}");
 
@@ -204,11 +191,10 @@ public class UniverseSyncService
         return systemsToInsert.Count;
     }
 
+    // Resolves missing market locations from imported orders and saves typed station or structure rows into MarketLocations.
     public async Task<int> SyncMarketLocationsAsync()
     {
         Console.WriteLine("Checking market locations...");
-
-        using var http = CreateHttpClient();
 
         var orderLocations = await _db.MarketOrders
             .Select(x => new { x.LocationId, x.SystemId })
@@ -236,8 +222,7 @@ public class UniverseSyncService
 
         if (missingLocations.Any(x => !IsStationId(x.LocationId)))
         {
-            using var publicStructuresResp = await GetWithRetryAsync(
-                http,
+            using var publicStructuresResp = await _esiClient.GetAsync(
                 "universe/structures/?datasource=tranquility",
                 "public structures list");
 
@@ -253,8 +238,7 @@ public class UniverseSyncService
         {
             if (IsStationId(entry.LocationId))
             {
-                using var stationResp = await TryGetWithRetryAsync(
-                    http,
+                using var stationResp = await _esiClient.TryGetAsync(
                     $"universe/stations/{entry.LocationId}/?datasource=tranquility",
                     $"station {entry.LocationId}");
 
@@ -308,167 +292,13 @@ public class UniverseSyncService
         return locationsToInsert.Count;
     }
 
+    // Returns true when location ID falls in NPC station ID range.
     private static bool IsStationId(long locationId)
     {
         return locationId >= 60_000_000 && locationId < 64_000_000;
     }
 
-    // Sends a GET request with retry handling and throws if the final result still fails.
-    private Task<HttpResponseMessage> GetWithRetryAsync(HttpClient http, string url, string operation)
-    {
-        return SendWithRetryAsync(
-            () => http.GetAsync(url),
-            operation,
-            allowNonRetriableFailure: false);
-    }
-
-    // Sends a GET request with retry handling, but lets the caller inspect non-retriable failures like 404 instead of throwing immediately.
-    private Task<HttpResponseMessage> TryGetWithRetryAsync(HttpClient http, string url, string operation)
-    {
-        return SendWithRetryAsync(
-            () => http.GetAsync(url),
-            operation,
-            allowNonRetriableFailure: true);
-    }
-
-    // Sends a POST request with a JSON body and retries transient failures before giving up.
-    private Task<HttpResponseMessage> PostAsJsonWithRetryAsync<T>(HttpClient http, string url, T body, string operation)
-    {
-        return SendWithRetryAsync(
-            () => http.PostAsJsonAsync(url, body),
-            operation,
-            allowNonRetriableFailure: false);
-    }
-
-    // Core retry loop used by GET/POST helpers; retries transient network and HTTP failures with backoff.
-    private async Task<HttpResponseMessage> SendWithRetryAsync(
-        Func<Task<HttpResponseMessage>> sendAsync,
-        string operation,
-        bool allowNonRetriableFailure)
-    {
-        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
-        {
-            try
-            {
-                var resp = await sendAsync();
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    if (IsRetriableStatusCode(resp.StatusCode))
-                    {
-                        if (attempt < MaxRequestAttempts)
-                        {
-                            var delay = GetRetryDelay(resp, attempt);
-
-                            Console.WriteLine(
-                                $"{operation}: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                            resp.Dispose();
-                            await Task.Delay(delay);
-                            continue;
-                        }
-
-                        // If we've exhausted retries, we'll let the non-success status propagate as an exception below, 
-                        //but we still want to dispose the response first to free resources.
-                        try
-                        {
-                            resp.EnsureSuccessStatusCode();
-                        }
-                        catch
-                        {
-                            resp.Dispose();
-                            throw;
-                        }
-                    }
-
-                    if (allowNonRetriableFailure)
-                    {
-                        return resp;
-                    }
-
-                    try
-                    {
-                        resp.EnsureSuccessStatusCode();
-                    }
-                    catch
-                    {
-                        resp.Dispose();
-                        throw;
-                    }
-                }
-
-                return resp;
-            }
-            catch (HttpRequestException ex) when (attempt < MaxRequestAttempts)
-            {
-                var delay = GetRetryDelay(attempt);
-
-                Console.WriteLine(
-                    $"{operation}: request failed: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                await Task.Delay(delay);
-            }
-            catch (TaskCanceledException ex) when (attempt < MaxRequestAttempts)
-            {
-                var delay = GetRetryDelay(attempt);
-
-                Console.WriteLine(
-                    $"{operation}: request timed out: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                await Task.Delay(delay);
-            }
-        }
-
-        throw new InvalidOperationException($"Request retry loop ended unexpectedly for {operation}.");
-    }
-
-    // Returns true for HTTP statuses that are usually temporary and worth retrying.
-    private static bool IsRetriableStatusCode(HttpStatusCode statusCode)
-    {
-        return (int)statusCode == 420 ||
-               statusCode == HttpStatusCode.TooManyRequests ||
-               (int)statusCode >= 500;
-    }
-
-    // Returns a backoff delay based on the current retry attempt number.
-    private static TimeSpan GetRetryDelay(int attempt)
-    {
-        var index = Math.Min(attempt - 1, RetryDelays.Length - 1);
-        return RetryDelays[index];
-    }
-
-    // Uses Retry-After from the server when present; otherwise falls back to the normal backoff delay.
-    private static TimeSpan GetRetryDelay(HttpResponseMessage resp, int attempt)
-    {
-        var retryAfter = resp.Headers.RetryAfter?.Delta;
-
-        if (retryAfter is not null && retryAfter.Value > TimeSpan.Zero)
-        {
-            return retryAfter.Value;
-        }
-
-        return GetRetryDelay(attempt);
-    }
-
-    private static HttpClient CreateHttpClient()
-    {
-        var http = new HttpClient
-        {
-            BaseAddress = new Uri("https://esi.evetech.net/latest/")
-        };
-
-        http.DefaultRequestHeaders.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-
-        http.DefaultRequestHeaders.TryAddWithoutValidation(
-            "X-Compatibility-Date",
-            CompatibilityDate);
-
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("EveOnTrader.Worker/1.0");
-
-        return http;
-    }
-
+    // Splits list of IDs into fixed-size batches for batched ESI requests.
     private static IEnumerable<List<long>> Batch(List<long> source, int batchSize)
     {
         for (var i = 0; i < source.Count; i += batchSize)

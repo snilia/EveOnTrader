@@ -1,6 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using EveOnTrader.Core.Models;
 using EveOnTrader.Infra.Data;
@@ -10,35 +8,30 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveOnTrader.Worker;
 
+// MarketImportRunner coordinates one worker import run: seed references, import selected region orders, then resolve related lookup data.
 public class MarketImportRunner
 {
     private const string OrderType = "sell";
-    private const string CompatibilityDate = "2025-12-16";
-    private const int MaxRequestAttempts = 5;
-
-    private static readonly TimeSpan[] RetryDelays =
-    [
-        TimeSpan.FromSeconds(2),
-        TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(20),
-        TimeSpan.FromSeconds(30)
-    ];
 
     private readonly AppDbContext _db;
+    private readonly EsiClient _esiClient;
     private readonly ItemTypeNameSyncService _itemTypeNameSyncService;
     private readonly UniverseSyncService _universeSyncService;
 
+    // Creates the runner with database access, shared ESI client, and supporting sync services.
     public MarketImportRunner(
         AppDbContext db,
+        EsiClient esiClient,
         ItemTypeNameSyncService itemTypeNameSyncService,
         UniverseSyncService universeSyncService)
     {
         _db = db;
+        _esiClient = esiClient;
         _itemTypeNameSyncService = itemTypeNameSyncService;
         _universeSyncService = universeSyncService;
     }
 
+    // Runs full worker flow for the selected region set: reference sync, market import, location sync, and item type sync.
     public async Task RunAsync(string dbPath, MarketImportOptions options)
     {
         Console.WriteLine($"DB Path: {dbPath}");
@@ -69,6 +62,7 @@ public class MarketImportRunner
         Console.WriteLine($"Total elapsed: {sw.Elapsed}.");
     }
 
+    // Downloads all sell-order pages for the selected regions into a fresh MarketOrders snapshot.
     private async Task<long> ImportMarketOrdersAsync(IReadOnlyList<long> regionIds)
     {
         Console.WriteLine("Clearing MarketOrders (fresh snapshot)...");
@@ -76,8 +70,6 @@ public class MarketImportRunner
 
         //EF's auto change detection off, helps speed
         _db.ChangeTracker.AutoDetectChangesEnabled = false;
-
-        using var http = CreateHttpClient();
 
         long totalInserted = 0;
         var seenOrderIds = new HashSet<long>();
@@ -121,108 +113,5 @@ public class MarketImportRunner
         }
 
         return totalInserted;
-    }
-
-    private async Task<HttpResponseMessage> GetWithRetryAsync(HttpClient http, string url, long regionId, int page)
-    {
-        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
-        {
-            try
-            {
-                var resp = await http.GetAsync(url);
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    if (IsRetriableStatusCode(resp.StatusCode) && attempt < MaxRequestAttempts)
-                    {
-                        var delay = GetRetryDelay(resp, attempt);
-
-                        Console.WriteLine(
-                            $"Region {regionId} page {page}: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                        resp.Dispose();
-                        await Task.Delay(delay);
-                        continue;
-                    }
-
-                    try
-                    {
-                        resp.EnsureSuccessStatusCode();
-                    }
-                    catch
-                    {
-                        resp.Dispose();
-                        throw;
-                    }
-                }
-
-                return resp;
-            }
-            catch (HttpRequestException ex) when (attempt < MaxRequestAttempts)
-            {
-                var delay = GetRetryDelay(attempt);
-
-                Console.WriteLine(
-                    $"Region {regionId} page {page}: request failed: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                await Task.Delay(delay);
-            }
-            catch (TaskCanceledException ex) when (attempt < MaxRequestAttempts)
-            {
-                var delay = GetRetryDelay(attempt);
-
-                Console.WriteLine(
-                    $"Region {regionId} page {page}: request timed out: {ex.Message}. Retrying in {delay.TotalSeconds:n0}s (attempt {attempt}/{MaxRequestAttempts})...");
-
-                await Task.Delay(delay);
-            }
-        }
-
-        throw new InvalidOperationException(
-            $"Request retry loop ended unexpectedly for region {regionId} page {page}.");
-    }
-
-    private static bool IsRetriableStatusCode(HttpStatusCode statusCode)
-    {
-        return (int)statusCode == 420 ||
-               statusCode == HttpStatusCode.TooManyRequests ||
-               (int)statusCode >= 500;
-    }
-
-    private static TimeSpan GetRetryDelay(int attempt)
-    {
-        var index = Math.Min(attempt - 1, RetryDelays.Length - 1);
-        return RetryDelays[index];
-    }
-
-    private static TimeSpan GetRetryDelay(HttpResponseMessage resp, int attempt)
-    {
-        var retryAfter = resp.Headers.RetryAfter?.Delta;
-
-        if (retryAfter is not null && retryAfter.Value > TimeSpan.Zero)
-        {
-            return retryAfter.Value;
-        }
-
-        return GetRetryDelay(attempt);
-    }
-
-    private static HttpClient CreateHttpClient()
-    {
-        var http = new HttpClient
-        {
-            BaseAddress = new Uri("https://esi.evetech.net/latest/")
-        };
-
-        http.DefaultRequestHeaders.Accept.Add(
-            new MediaTypeWithQualityHeaderValue("application/json"));
-
-        http.DefaultRequestHeaders.TryAddWithoutValidation(
-            "X-Compatibility-Date",
-            CompatibilityDate);
-
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("EveOnTrader.Worker/1.0");
-
-        return http;
     }
 }

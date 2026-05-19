@@ -42,4 +42,6 @@ public class MarketOrder
 
     // your internal field, not from ESI:
     public long RegionId { get; set; }
+    public Guid ImportBatchId { get; set; }
+    public DateTime ImportedAtUtc { get; set; }
 }

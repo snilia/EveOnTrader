@@ -1,7 +1,8 @@
 ﻿namespace EveOnTrader.Worker.Models;
 
+// MarketImportOptions groups one named set of order import requests for a worker run.
 public class MarketImportOptions
 {
     public string SelectionName { get; set; } = "";
-    public IReadOnlyList<long> RegionIds { get; set; } = Array.Empty<long>();
+    public IReadOnlyList<OrderImportRequest> Requests { get; set; } = Array.Empty<OrderImportRequest>();
 }

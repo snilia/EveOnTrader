@@ -22,10 +22,9 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.OrderId);
             e.Property(x => x.OrderId).ValueGeneratedNever();
 
-            //keep RegionId + TypeId queries fast later
-            e.HasIndex(x => x.RegionId);
-            e.HasIndex(x => x.TypeId);
-            e.HasIndex(x => x.LocationId);
+            //keep deal-finder and scoped refresh queries fast
+            e.HasIndex(x => new { x.RegionId, x.IsBuyOrder, x.ImportedAtUtc, x.TypeId });
+            e.HasIndex(x => new { x.LocationId, x.IsBuyOrder, x.ImportedAtUtc });
         });
 
         modelBuilder.Entity<ItemTypeRef>(e =>

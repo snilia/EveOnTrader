@@ -9,6 +9,9 @@
 <table class="table table-striped table-sm">
     <thead>
         <tr>
+            <th>Imported Utc</th>
+            <th>Batch Id</th>
+            <th>Side</th>
             <th>Issued</th>
             <th>Type</th>
             <th>Region</th>
@@ -24,6 +27,9 @@
         @foreach (var o in Model)
         {
             <tr>
+                <td>@o.ImportedAtUtc</td>
+                <td>@o.ImportBatchId</td>
+                <td>@(o.IsBuyOrder ? "Buy" : "Sell")</td>
                 <td>@o.Issued</td>
                 <td>@o.TypeName</td>
                 <td>@o.RegionName</td>

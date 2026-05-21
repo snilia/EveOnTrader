@@ -45,6 +45,7 @@ public static class RegionImportPrompt
         {
             Console.WriteLine();
             Console.WriteLine($"Choose region preset for {orderLabel} orders:");
+            Console.WriteLine("0. None");
             Console.WriteLine("1. All");
             Console.WriteLine("2. The Forge");
             Console.WriteLine("3. The Forge + Domain (Amarr)");
@@ -55,6 +56,16 @@ public static class RegionImportPrompt
             Console.Write("Selection: ");
 
             var input = (Console.ReadLine() ?? "").Trim();
+
+            //if no import option selected, return empty request list
+            if (input == "0")
+            {
+                return new OrderSideSelection
+                {
+                    SelectionName = "None",
+                    Requests = Array.Empty<OrderImportRequest>()
+                };
+            }
 
             //if manual option selected, prompt for region IDs and validate them
             if (input == "7")

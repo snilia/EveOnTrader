@@ -13,6 +13,7 @@ public static class ServiceRegistration
             options.UseSqlite(sqliteConnectionString));
 
         services.AddScoped<OrderQueryService>();
+        services.AddScoped<OrderInRouteQueryService>();
 
         return services;
     }

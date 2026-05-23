@@ -130,6 +130,7 @@ public class OrderInRouteQueryService
                 Range = o.Range,
                 ImportBatchId = o.ImportBatchId,
                 ImportedAtUtc = o.ImportedAtUtc,
+                UnitVolumeM3 = t != null ? t.VolumeM3 : 0m,
                 TypeName = t != null ? t.Name : "(unknown item)",
                 RegionName = region != null ? region.Name : "(unknown region)",
                 SystemName = system != null ? system.Name : "(unknown system)",
@@ -153,6 +154,9 @@ public class OrderInRouteQueryService
                     .Select(x => x.TypeName)
                     .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && x != "(unknown item)")
                     ?? "(unknown item)",
+                UnitVolumeM3 = g
+                    .Select(x => x.UnitVolumeM3)
+                    .FirstOrDefault(x => x > 0m),
                 SourceSellOrders = g
                     .Where(x => !x.IsBuyOrder)
                     .OrderBy(x => x.Price)

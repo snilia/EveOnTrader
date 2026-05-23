@@ -5,6 +5,7 @@ public class SingleItemTypeOrderRoute
 {
     public long TypeId { get; set; }
     public string TypeName { get; set; } = "";
+    public decimal UnitVolumeM3 { get; set; }
     public List<ItemOrderRow> SourceSellOrders { get; set; } = [];
     public List<ItemOrderRow> DestinationBuyOrders { get; set; } = [];
 }

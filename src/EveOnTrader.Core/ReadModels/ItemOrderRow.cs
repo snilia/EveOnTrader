@@ -18,6 +18,7 @@ public class ItemOrderRow
     public string Range { get; set; } = "";
     public Guid ImportBatchId { get; set; }
     public DateTime ImportedAtUtc { get; set; }
+    public decimal UnitVolumeM3 { get; set; }
     public string TypeName { get; set; } = "";
     public string RegionName { get; set; } = "";
     public string SystemName { get; set; } = "";

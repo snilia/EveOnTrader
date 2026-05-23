@@ -35,6 +35,9 @@ public class AppDbContext : DbContext
             e.Property(x => x.Name)
                 .IsRequired()
                 .HasMaxLength(300);
+
+            e.Property(x => x.VolumeM3)
+                .HasPrecision(18, 4);
         });
 
         modelBuilder.Entity<Region>(e =>

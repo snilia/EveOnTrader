@@ -11,8 +11,6 @@ namespace EveOnTrader.Worker.Services;
 //resolves their names from ESI in batches, and saves them into the database.
 public class ItemTypeNameSyncService
 {
-    private const int BatchSize = 500;
-
     private readonly AppDbContext _db;
     private readonly EsiClient _esiClient;
 
@@ -23,7 +21,7 @@ public class ItemTypeNameSyncService
         _esiClient = esiClient;
     }
 
-    // Finds missing item type IDs from MarketOrders, resolves names from ESI, and stores them in ItemTypeRefs.
+    // Finds missing item type IDs from MarketOrders, resolves names and volume from ESI, and stores them in ItemTypeRefs.
     public async Task<int> SyncItemTypeRefsAsync()
     {
         Console.WriteLine("Checking for missing item type names...");
@@ -48,51 +46,47 @@ public class ItemTypeNameSyncService
             return 0;
         }
 
-        Console.WriteLine($"Found {missingTypeIds.Count:n0} missing item type IDs. Resolving names from ESI...");
+        Console.WriteLine($"Found {missingTypeIds.Count:n0} missing item type IDs. Resolving details from ESI...");
 
-        var inserted = 0;
+        var refsToInsert = new List<ItemTypeRef>();
+        var processed = 0;
 
-        foreach (var batch in Batch(missingTypeIds, BatchSize))
+        foreach (var typeId in missingTypeIds)
         {
-            using var resp = await _esiClient.PostAsJsonAsync(
-                "universe/names/?datasource=tranquility",
-                batch,
-                $"item type names batch ({batch.Count:n0} ids)");
+            using var resp = await _esiClient.GetAsync(
+                $"universe/types/{typeId}/?datasource=tranquility",
+                $"item type details {typeId}");
 
-            var results = await resp.Content.ReadFromJsonAsync<List<UniverseNameResult>>()
-                         ?? new List<UniverseNameResult>();
+            var typeResult = await resp.Content.ReadFromJsonAsync<UniverseTypeResult>();
 
-            var refsToInsert = results
-                .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-                .Select(x => new ItemTypeRef
-                {
-                    TypeId = x.Id,
-                    Name = x.Name
-                })
-                .ToList();
-
-            if (refsToInsert.Count > 0)
+            if (typeResult is null || string.IsNullOrWhiteSpace(typeResult.Name))
             {
-                _db.ItemTypeRefs.AddRange(refsToInsert);
-                await _db.SaveChangesAsync();
-                _db.ChangeTracker.Clear();
-
-                inserted += refsToInsert.Count;
+                continue;
             }
 
-            Console.WriteLine($"Resolved {inserted:n0}/{missingTypeIds.Count:n0} item type names...");
+            refsToInsert.Add(new ItemTypeRef
+            {
+                TypeId = typeId,
+                Name = typeResult.Name,
+                VolumeM3 = typeResult.VolumeM3
+            });
+
+            processed++;
+
+            if (processed % 100 == 0 || processed == missingTypeIds.Count)
+            {
+                Console.WriteLine($"Resolved {processed:n0}/{missingTypeIds.Count:n0} item type details...");
+            }
         }
 
-        Console.WriteLine($"Inserted {inserted:n0} new ItemTypeRef rows.");
-        return inserted;
-    }
-
-    // Splits list of IDs into fixed-size batches for batched ESI requests.
-    private static IEnumerable<List<long>> Batch(List<long> source, int batchSize)
-    {
-        for (var i = 0; i < source.Count; i += batchSize)
+        if (refsToInsert.Count > 0)
         {
-            yield return source.Skip(i).Take(batchSize).ToList();
+            _db.ItemTypeRefs.AddRange(refsToInsert);
+            await _db.SaveChangesAsync();
+            _db.ChangeTracker.Clear();
         }
+
+        Console.WriteLine($"Inserted {refsToInsert.Count:n0} new ItemTypeRef rows.");
+        return refsToInsert.Count;
     }
 }

@@ -37,4 +37,28 @@ public class RoutesController : Controller
 
         return View(route);
     }
+
+    // GET: /Routes/DodixieToJita
+    // Loads grouped Dodixie-hub sells and Jita-hub buy orders for hub-to-hub inspection.
+    public async Task<IActionResult> DodixieToJita()
+    {
+        const long sourceLocationId = 60011866;
+        const long destinationLocationId = 60003760;
+
+        var route = await _orderInRouteQueryService.GetAllItemTypesOrderRouteByLocationAsync(
+            sourceLocationId,
+            destinationLocationId);
+
+        ViewBag.SourceLocationName = route.Items
+            .SelectMany(x => x.SourceSellOrders)
+            .Select(x => x.LocationName)
+            .FirstOrDefault() ?? sourceLocationId.ToString();
+
+        ViewBag.DestinationLocationName = route.Items
+            .SelectMany(x => x.DestinationBuyOrders)
+            .Select(x => x.LocationName)
+            .FirstOrDefault() ?? destinationLocationId.ToString();
+
+        return View(route);
+    }
 }

@@ -22,50 +22,80 @@ public class OrderInRouteQueryService
         DateTime? importedAfterUtc = null)
     {
         //query all orders for the route, all items, both sides
-        var rows = await GetItemOrderRowsAsync(sourceRegionId, destinationLocationId, importedAfterUtc);
-
-        //take all raw orders from route, split them by item type, then group each item type's orders into source-region sells 
-        //and destination-location buys, return all item groups as one list
-        var items = rows
-            .GroupBy(x => x.TypeId)
-            .Select(g => new SingleItemTypeOrderRoute
-            {
-                TypeId = g.Key,
-                TypeName = g
-                    .Select(x => x.TypeName)
-                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && x != "(unknown item)")
-                    ?? "(unknown item)",
-                SourceSellOrders = g
-                    .Where(x => !x.IsBuyOrder)
-                    .OrderBy(x => x.Price)
-                    .ThenByDescending(x => x.VolumeRemain)
-                    .ToList(),
-                DestinationBuyOrders = g
-                    .Where(x => x.IsBuyOrder)
-                    .OrderByDescending(x => x.Price)
-                    .ThenByDescending(x => x.VolumeRemain)
-                    .ToList()
-            })
-            .OrderBy(x => x.TypeId)
-            .ToList();
+        var rows = await GetItemOrderRowsAsync(
+            sourceRegionId,
+            null,
+            destinationLocationId,
+            importedAfterUtc);
 
         return new AllItemTypesOrderRoute
         {
             SourceRegionId = sourceRegionId,
+            SourceLocationId = null,
             DestinationLocationId = destinationLocationId,
             ImportedAfterUtc = importedAfterUtc,
-            Items = items
+            Items = BuildItemRoutes(rows)
         };
     }
 
-    // Loads raw source-region sells and destination-location buys for one route, with optional freshness cutoff.
+    // Loads and groups source-location sells with destination-location buys for one route, with optional freshness cutoff.
+    public async Task<AllItemTypesOrderRoute> GetAllItemTypesOrderRouteByLocationAsync(
+        long sourceLocationId,
+        long destinationLocationId,
+        DateTime? importedAfterUtc = null)
+    {
+        //query all orders for the route, all items, both sides
+        var rows = await GetItemOrderRowsAsync(
+            null,
+            sourceLocationId,
+            destinationLocationId,
+            importedAfterUtc);
+
+        return new AllItemTypesOrderRoute
+        {
+            SourceRegionId = null,
+            SourceLocationId = sourceLocationId,
+            DestinationLocationId = destinationLocationId,
+            ImportedAfterUtc = importedAfterUtc,
+            Items = BuildItemRoutes(rows)
+        };
+    }
+
+    // Loads raw source-side sells and destination-location buys for one route, with optional freshness cutoff.
     private async Task<List<ItemOrderRow>> GetItemOrderRowsAsync(
-        long sourceRegionId,
+        long? sourceRegionId,
+        long? sourceLocationId,
         long destinationLocationId,
         DateTime? importedAfterUtc)
     {
+        var candidateOrders = _db.MarketOrders
+            .AsNoTracking()
+            .Where(o =>
+                (
+                    sourceRegionId.HasValue &&
+                    o.RegionId == sourceRegionId.Value &&
+                    !o.IsBuyOrder
+                )
+                ||
+                (
+                    sourceLocationId.HasValue &&
+                    o.LocationId == sourceLocationId.Value &&
+                    !o.IsBuyOrder
+                )
+                ||
+                (
+                    o.LocationId == destinationLocationId &&
+                    o.IsBuyOrder
+                ));
+
+        if (importedAfterUtc.HasValue)
+        {
+            candidateOrders = candidateOrders
+                .Where(o => o.ImportedAtUtc >= importedAfterUtc.Value);
+        }
+
         var query =
-            from o in _db.MarketOrders.AsNoTracking()
+            from o in candidateOrders
 
             join t in _db.ItemTypeRefs.AsNoTracking()
                 on o.TypeId equals t.TypeId into typeRefs
@@ -82,17 +112,6 @@ public class OrderInRouteQueryService
             join location in _db.MarketLocations.AsNoTracking()
                 on o.LocationId equals location.LocationId into locationRefs
             from location in locationRefs.DefaultIfEmpty()
-
-            where
-                (
-                    o.RegionId == sourceRegionId &&
-                    o.IsBuyOrder == false
-                )
-                ||
-                (
-                    o.LocationId == destinationLocationId &&
-                    o.IsBuyOrder == true
-                )
 
             select new ItemOrderRow
             {
@@ -117,11 +136,35 @@ public class OrderInRouteQueryService
                 LocationName = location != null ? location.Name : "(unknown location)"
             };
 
-        if (importedAfterUtc.HasValue)
-        {
-            query = query.Where(x => x.ImportedAtUtc >= importedAfterUtc.Value);
-        }
-
         return await query.ToListAsync();
+    }
+
+    // Takes flat route rows and groups them into one sorted route object per item type.
+    private static List<SingleItemTypeOrderRoute> BuildItemRoutes(List<ItemOrderRow> rows)
+    {
+        //take all raw orders from route, split them by item type, then group each item type's orders into source-side sells 
+        //and destination-location buys, return all item groups as one list
+        return rows
+            .GroupBy(x => x.TypeId)
+            .Select(g => new SingleItemTypeOrderRoute
+            {
+                TypeId = g.Key,
+                TypeName = g
+                    .Select(x => x.TypeName)
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && x != "(unknown item)")
+                    ?? "(unknown item)",
+                SourceSellOrders = g
+                    .Where(x => !x.IsBuyOrder)
+                    .OrderBy(x => x.Price)
+                    .ThenByDescending(x => x.VolumeRemain)
+                    .ToList(),
+                DestinationBuyOrders = g
+                    .Where(x => x.IsBuyOrder)
+                    .OrderByDescending(x => x.Price)
+                    .ThenByDescending(x => x.VolumeRemain)
+                    .ToList()
+            })
+            .OrderBy(x => x.TypeId)
+            .ToList();
     }
 }

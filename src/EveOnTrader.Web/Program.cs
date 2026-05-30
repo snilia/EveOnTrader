@@ -1,6 +1,6 @@
+using EveOnTrader.Core.DealFinding.Services;
 using EveOnTrader.Infra;
 using EveOnTrader.Infra.Data;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,11 +16,15 @@ Directory.CreateDirectory(dataDir);
 var dbPath = Path.Combine(dataDir, "eve.db");
 var connStr = $"Data Source={dbPath}";
 
-// Helpful for debugging “different DB file” issues
+// Helpful for debugging "different DB file" issues
 Console.WriteLine($"Web DB Path: {dbPath}");
 
 // Register Infra (DbContext, etc.)
 builder.Services.AddInfra(connStr);
+
+// Register Core deal finders
+builder.Services.AddScoped<ItemRouteDealFinder>();
+builder.Services.AddScoped<RouteDealFinder>();
 
 var app = builder.Build();
 

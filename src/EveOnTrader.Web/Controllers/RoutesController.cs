@@ -76,7 +76,7 @@ public class RoutesController : Controller
         decimal? minTotalRoi = null,
         decimal? salesTaxRate = null)
     {
-        const long sourceLocationId = 60008494;
+        const long sourceLocationId = 60011866;
         const long destinationLocationId = 60003760;
 
         var route = await _orderInRouteQueryService.GetAllItemTypesOrderRouteByLocationAsync(
@@ -88,7 +88,7 @@ public class RoutesController : Controller
             MaxTotalBuyCost = maxTotalBuyCost,
             MaxTotalVolumeM3 = maxTotalVolumeM3,
             MinTotalRoi = minTotalRoi,
-            SalesTaxRate = salesTaxRate ?? 0m,
+            SalesTaxRate = salesTaxRate ?? 0.0337m,
             JumpCount = 1
         };
 

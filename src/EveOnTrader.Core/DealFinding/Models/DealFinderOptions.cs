@@ -18,7 +18,7 @@ public class DealFinderOptions
     public decimal? MinProfitPerJump { get; set; }
     public int? MaxSteps { get; set; }
     public int JumpCount { get; set; } = 1;
-    public decimal BrokerFeeRate { get; set; } = 0m;
-    public decimal SalesTaxRate { get; set; } = 0m;
+    public decimal BrokerFeeRate { get; set; } = 0.012m;
+    public decimal SalesTaxRate { get; set; } = 0.0337m;
     public RouteSecurityLimit RouteSecurityLimit { get; set; } = RouteSecurityLimit.NullSecAllowed;
 }

@@ -1,0 +1,252 @@
+﻿@model EveOnTrader.Web.Models.MarketDealsSearchViewModel
+@using EveOnTrader.Core.DealFinding.Models
+
+@{
+    ViewBag.Title = "Market Deals Search";
+}
+
+<h2>Market Deals Search</h2>
+
+<p>
+    Current version = station-list to station-list.<br />
+    Sell Stations = where you buy from sell orders.<br />
+    Buy Stations = where you sell into buy orders.<br />
+    Each result row is one item on one sell-station to buy-station route.
+</p>
+
+<form method="get" asp-action="Index" class="mb-4">
+    <div class="mb-3">
+        <label class="form-label">Quick Routes To Jita</label><br />
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60011866', '60003760')">Dodixie -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60008494', '60003760')">Amarr -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60005686', '60003760')">Hek -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60004588', '60003760')">Rens -> Jita</button>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Quick Routes To Amarr</label><br />
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60011866', '60008494')">Dodixie -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60003760', '60008494')">Jita -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60005686', '60008494')">Hek -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60004588', '60008494')">Rens -> Amarr</button>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label asp-for="Input.SellStationIdsText" class="form-label">Sell Station IDs</label>
+            <textarea asp-for="Input.SellStationIdsText" rows="4" class="form-control"></textarea>
+            <div class="form-text mb-2">One or more station IDs. Separate by comma, space, semicolon, or newline.</div>
+            <div class="mt-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60003760)">Add Jita</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60008494)">Add Amarr</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60011866)">Add Dodixie</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60005686)">Add Hek</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60004588)">Add Rens</button>
+                <button type="button" class="btn btn-outline-danger btn-sm me-2 mb-2" onclick="clearSellStations()">Clear</button>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <label asp-for="Input.BuyStationIdsText" class="form-label">Buy Station IDs</label>
+            <textarea asp-for="Input.BuyStationIdsText" rows="4" class="form-control"></textarea>
+            <div class="form-text mb-2">One or more station IDs. Separate by comma, space, semicolon, or newline.</div>
+            <div class="mt-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60003760)">Add Jita</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60008494)">Add Amarr</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60011866)">Add Dodixie</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60005686)">Add Hek</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60004588)">Add Rens</button>
+                <button type="button" class="btn btn-outline-danger btn-sm me-2 mb-2" onclick="clearBuyStations()">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label asp-for="Input.MaxTotalBuyCost" class="form-label"></label>
+            <input asp-for="Input.MaxTotalBuyCost" type="number" step="any" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.MaxTotalVolumeM3" class="form-label"></label>
+            <input asp-for="Input.MaxTotalVolumeM3" type="number" step="any" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.MinTotalProfit" class="form-label"></label>
+            <input asp-for="Input.MinTotalProfit" type="number" step="any" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.MinTotalRoi" class="form-label"></label>
+            <div class="form-text mb-1">0.10 = 10%</div>
+            <input asp-for="Input.MinTotalRoi" type="number" step="any" class="form-control" />
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <label asp-for="Input.MinProfitPerJump" class="form-label"></label>
+            <input asp-for="Input.MinProfitPerJump" type="number" step="any" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.MaxSteps" class="form-label"></label>
+            <input asp-for="Input.MaxSteps" type="number" step="1" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.JumpCount" class="form-label"></label>
+            <input asp-for="Input.JumpCount" type="number" step="1" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <label asp-for="Input.SalesTaxRate" class="form-label"></label>
+            <div class="form-text mb-1">0.0337 = 3.37%</div>
+            <input asp-for="Input.SalesTaxRate" type="number" step="any" class="form-control" />
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label asp-for="Input.BrokerFeeRate" class="form-label"></label>
+            <div class="form-text mb-1">Future use</div>
+            <input asp-for="Input.BrokerFeeRate" type="number" step="any" class="form-control" />
+        </div>
+
+        <div class="col-md-6">
+            <label asp-for="Input.RouteSecurityLimit" class="form-label"></label>
+            <div class="form-text mb-1">Future use</div>
+            <select asp-for="Input.RouteSecurityLimit" asp-items="Html.GetEnumSelectList<RouteSecurityLimit>()" class="form-select"></select>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Find Deals</button>
+</form>
+
+@if (!string.IsNullOrWhiteSpace(Model.Result.SearchMessage))
+{
+    <div class="alert alert-warning">
+        @Model.Result.SearchMessage
+    </div>
+}
+
+@if (Model.Result.HasSearched)
+{
+    <p>
+        Sell Stations: @Model.Result.SellStationCount.ToString("N0")<br />
+        Buy Stations: @Model.Result.BuyStationCount.ToString("N0")<br />
+        Route Pairs: @Model.Result.RoutePairCount.ToString("N0")<br />
+        Jumps: @Model.Input.JumpCount.ToString("N0")
+    </p>
+}
+
+@if (Model.Result.DealRows.Count == 0)
+{
+    if (Model.Result.HasSearched && Model.Result.SellStationCount > 0 && Model.Result.BuyStationCount > 0)
+    {
+        <p>No matching deals.</p>
+    }
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped table-sm">
+            <thead>
+                <tr>
+                    <th>TypeId</th>
+                    <th>Type</th>
+                    <th>Sell Station</th>
+                    <th>Sell Region</th>
+                    <th>Buy Station</th>
+                    <th>Buy Region</th>
+                    <th>Jumps</th>
+                    <th>Steps</th>
+                    <th>Units</th>
+                    <th>Volume M3</th>
+                    <th>Buy Cost</th>
+                    <th>Sell Revenue</th>
+                    <th>Profit</th>
+                    <th>ROI</th>
+                    <th>Profit / M3</th>
+                    <th>Profit / Jump</th>
+                    <th>Best Sell</th>
+                    <th>Best Buy</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Result.DealRows)
+                {
+                    <tr>
+                        <td>@row.TypeId.ToString("N0")</td>
+                        <td>@row.TypeName</td>
+                        <td>@row.SellStationName (@row.SellStationId.ToString("N0"))</td>
+                        <td>
+                            @if (row.SellRegionId.HasValue)
+                            {
+                                @($"{row.SellRegionName} ({row.SellRegionId.Value.ToString("N0")})")
+                            }
+                        </td>
+                        <td>@row.BuyStationName (@row.BuyStationId.ToString("N0"))</td>
+                        <td>
+                            @if (row.BuyRegionId.HasValue)
+                            {
+                                @($"{row.BuyRegionName} ({row.BuyRegionId.Value.ToString("N0")})")
+                            }
+                        </td>
+                        <td>@row.JumpCount.ToString("N0")</td>
+                        <td>@row.StepCount.ToString("N0")</td>
+                        <td>@row.TotalUnits.ToString("N0")</td>
+                        <td>@row.TotalVolumeM3.ToString("N2")</td>
+                        <td>@row.TotalBuyCost.ToString("N2")</td>
+                        <td>@row.TotalSellRevenue.ToString("N2")</td>
+                        <td>@row.TotalProfit.ToString("N2")</td>
+                        <td>@row.TotalRoi.ToString("P2")</td>
+                        <td>@row.TotalProfitPerVolumeM3.ToString("N2")</td>
+                        <td>@row.TotalProfitPerJump.ToString("N2")</td>
+                        <td>@(row.BestSourceSellPrice.HasValue ? row.BestSourceSellPrice.Value.ToString("N2") : "0.00")</td>
+                        <td>@(row.BestDestinationBuyPrice.HasValue ? row.BestDestinationBuyPrice.Value.ToString("N2") : "0.00")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<script>
+    function setRoute(sellStationIds, buyStationIds) {
+        document.getElementById('Input_SellStationIdsText').value = sellStationIds;
+        document.getElementById('Input_BuyStationIdsText').value = buyStationIds;
+    }
+
+    function addSellStation(id) {
+        appendStationId('Input_SellStationIdsText', id);
+    }
+
+    function addBuyStation(id) {
+        appendStationId('Input_BuyStationIdsText', id);
+    }
+
+    function clearSellStations() {
+        document.getElementById('Input_SellStationIdsText').value = '';
+    }
+
+    function clearBuyStations() {
+        document.getElementById('Input_BuyStationIdsText').value = '';
+    }
+
+    function appendStationId(elementId, id) {
+        const element = document.getElementById(elementId);
+        const idText = id.toString();
+        const parts = element.value
+            .split(/[,\s;]+/)
+            .map(x => x.trim())
+            .filter(x => x.length > 0);
+
+        if (!parts.includes(idText)) {
+            parts.push(idText);
+        }
+
+        element.value = parts.join('\n');
+    }
+</script>

@@ -1,0 +1,58 @@
+﻿using EveOnTrader.Core.DealFinding.Models;
+using EveOnTrader.Core.RouteFinding;
+
+namespace EveOnTrader.Core.DealFinding.Services;
+
+// MarketDealFinder finds deals for many source locations and many destination locations.
+public class MarketDealFinder
+{
+    private readonly IStationToStationOrderRouteQuery _orderRouteQuery;
+    private readonly StationToStationDealFinder _stationToStationDealFinder;
+
+    // Creates market deal finder with order route query and station-to-station deal finder.
+    public MarketDealFinder(
+        IStationToStationOrderRouteQuery orderRouteQuery,
+        StationToStationDealFinder stationToStationDealFinder)
+    {
+        _orderRouteQuery = orderRouteQuery;
+        _stationToStationDealFinder = stationToStationDealFinder;
+    }
+
+    // FindDealsAsync finds all station-to-station deal results for every source/destination location pair.
+    public async Task<List<RouteDealResult>> FindDealsAsync(
+        List<long> sourceLocationIds,
+        List<long> destinationLocationIds,
+        RouteSecurityPreference routeSecurityPreference,
+        DealFinderOptions? options = null,
+        DateTime? importedAfterUtc = null)
+    {
+        options ??= new DealFinderOptions();
+
+        var routeResults = new List<RouteDealResult>();
+        var distinctSourceLocationIds = sourceLocationIds.Distinct().ToList();
+        var distinctDestinationLocationIds = destinationLocationIds.Distinct().ToList();
+
+        foreach (var sourceLocationId in distinctSourceLocationIds)
+        {
+            foreach (var destinationLocationId in distinctDestinationLocationIds)
+            {
+                var route = await _orderRouteQuery.GetAllItemTypesOrderRouteAsync(
+                    sourceLocationId,
+                    destinationLocationId,
+                    importedAfterUtc);
+
+                var routeResult = await _stationToStationDealFinder.FindDealsAsync(
+                    route,
+                    routeSecurityPreference,
+                    options);
+
+                if (routeResult.Items.Count > 0)
+                {
+                    routeResults.Add(routeResult);
+                }
+            }
+        }
+
+        return routeResults;
+    }
+}

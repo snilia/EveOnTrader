@@ -1,11 +1,12 @@
-﻿using EveOnTrader.Core.ReadModels;
+﻿using EveOnTrader.Core.DealFinding.Services;
+using EveOnTrader.Core.ReadModels;
 using EveOnTrader.Infra.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveOnTrader.Infra.Queries;
 
 // OrderInRouteQueryService loads and groups market orders for one source-to-destination trade route.
-public class OrderInRouteQueryService
+public class OrderInRouteQueryService : IStationToStationOrderRouteQuery
 {
     private readonly AppDbContext _db;
 
@@ -59,6 +60,18 @@ public class OrderInRouteQueryService
             ImportedAfterUtc = importedAfterUtc,
             Items = BuildItemRoutes(rows)
         };
+    }
+
+    // IStationToStationOrderRouteQuery implementation for station-to-station deal finding.
+    async Task<AllItemTypesOrderRoute> IStationToStationOrderRouteQuery.GetAllItemTypesOrderRouteAsync(
+        long sourceLocationId,
+        long destinationLocationId,
+        DateTime? importedAfterUtc)
+    {
+        return await GetAllItemTypesOrderRouteByLocationAsync(
+            sourceLocationId,
+            destinationLocationId,
+            importedAfterUtc);
     }
 
     // Loads raw source-side sells and destination-location buys for one route, with optional freshness cutoff.

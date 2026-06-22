@@ -1,7 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using EveOnTrader.Core.DealFinding.Services;
+using EveOnTrader.Core.RouteFinding;
 using EveOnTrader.Infra.Data;
 using EveOnTrader.Infra.Queries;
+using EveOnTrader.Infra.RouteFinding;
 
 namespace EveOnTrader.Infra;
 
@@ -14,6 +17,8 @@ public static class ServiceRegistration
 
         services.AddScoped<OrderQueryService>();
         services.AddScoped<OrderInRouteQueryService>();
+        services.AddScoped<IStationToStationOrderRouteQuery, OrderInRouteQueryService>();
+        services.AddScoped<IRouteDistanceService, RouteDistanceService>();
 
         return services;
     }

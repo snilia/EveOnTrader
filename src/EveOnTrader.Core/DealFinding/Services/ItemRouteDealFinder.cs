@@ -7,13 +7,13 @@ namespace EveOnTrader.Core.DealFinding.Services;
 public class ItemRouteDealFinder
 {
     // FindItemDeals walks cheapest source sells against highest destination buys and builds cumulative deal steps.
-    public ItemDealResult? FindItemDeals(SingleItemTypeOrderRoute itemRoute, DealFinderOptions? options = null)
+    public ItemDealResult? FindItemDeals(SingleItemTypeOrderRoute itemRoute, int jumpCount, DealFinderOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(itemRoute);
 
         options ??= new DealFinderOptions();
 
-        var jumpCount = options.JumpCount > 0 ? options.JumpCount : 1;
+        var safeJumpCount = jumpCount > 0 ? jumpCount : 1;
 
 
         // check for existence of orders before trying to find deals, and return null if no deals possible
@@ -125,7 +125,7 @@ public class ItemRouteDealFinder
                 LastChunkVolumeM3 = lastChunkVolumeM3,
                 LastChunkRoi = lastChunkBuyCost > 0m ? lastChunkProfit / lastChunkBuyCost : 0m,
                 LastChunkProfitPerVolumeM3 = lastChunkVolumeM3 > 0m ? lastChunkProfit / lastChunkVolumeM3 : 0m,
-                LastChunkProfitPerJump = lastChunkProfit / jumpCount,
+                LastChunkProfitPerJump = lastChunkProfit / safeJumpCount,
 
                 TotalUnits = totalUnits,
                 TotalBuyCost = totalBuyCost,
@@ -134,7 +134,7 @@ public class ItemRouteDealFinder
                 TotalVolumeM3 = totalVolumeM3,
                 TotalRoi = totalBuyCost > 0m ? totalProfit / totalBuyCost : 0m,
                 TotalProfitPerVolumeM3 = totalVolumeM3 > 0m ? totalProfit / totalVolumeM3 : 0m,
-                TotalProfitPerJump = totalProfit / jumpCount
+                TotalProfitPerJump = totalProfit / safeJumpCount
             };
 
             // check if this step meets user defined roi limits,

@@ -24,7 +24,8 @@ builder.Services.AddInfra(connStr);
 
 // Register Core deal finders
 builder.Services.AddScoped<ItemRouteDealFinder>();
-builder.Services.AddScoped<RouteDealFinder>();
+builder.Services.AddScoped<StationToStationDealFinder>();
+builder.Services.AddScoped<MarketDealFinder>();
 
 var app = builder.Build();
 

@@ -85,22 +85,17 @@
     </div>
 
     <div class="row g-3 mb-3">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <label asp-for="Input.MinProfitPerJump" class="form-label"></label>
             <input asp-for="Input.MinProfitPerJump" type="number" step="any" class="form-control" />
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
             <label asp-for="Input.MaxSteps" class="form-label"></label>
             <input asp-for="Input.MaxSteps" type="number" step="1" class="form-control" />
         </div>
 
-        <div class="col-md-3">
-            <label asp-for="Input.JumpCount" class="form-label"></label>
-            <input asp-for="Input.JumpCount" type="number" step="1" class="form-control" />
-        </div>
-
-        <div class="col-md-3">
+        <div class="col-md-4">
             <label asp-for="Input.SalesTaxRate" class="form-label"></label>
             <div class="form-text mb-1">0.0337 = 3.37%</div>
             <input asp-for="Input.SalesTaxRate" type="number" step="any" class="form-control" />
@@ -116,7 +111,7 @@
 
         <div class="col-md-6">
             <label asp-for="Input.RouteSecurityLimit" class="form-label"></label>
-            <div class="form-text mb-1">Future use</div>
+            <div class="form-text mb-1">Used by route-distance service. Current temporary service always returns 1 jump.</div>
             <select asp-for="Input.RouteSecurityLimit" asp-items="Html.GetEnumSelectList<RouteSecurityLimit>()" class="form-select"></select>
         </div>
     </div>
@@ -136,8 +131,7 @@
     <p>
         Sell Stations: @Model.Result.SellStationCount.ToString("N0")<br />
         Buy Stations: @Model.Result.BuyStationCount.ToString("N0")<br />
-        Route Pairs: @Model.Result.RoutePairCount.ToString("N0")<br />
-        Jumps: @Model.Input.JumpCount.ToString("N0")
+        Route Pairs: @Model.Result.RoutePairCount.ToString("N0")
     </p>
 }
 

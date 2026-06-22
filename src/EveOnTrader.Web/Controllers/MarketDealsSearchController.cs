@@ -1,7 +1,6 @@
 ﻿using EveOnTrader.Core.DealFinding.Models;
 using EveOnTrader.Core.DealFinding.Services;
-using EveOnTrader.Core.ReadModels;
-using EveOnTrader.Infra.Queries;
+using EveOnTrader.Core.RouteFinding;
 using EveOnTrader.Web.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,20 +9,16 @@ namespace EveOnTrader.Web.Controllers;
 // MarketDealsSearchController shows generic market-deal search pages.
 public class MarketDealsSearchController : Controller
 {
-    private readonly OrderInRouteQueryService _orderInRouteQueryService;
-    private readonly RouteDealFinder _routeDealFinder;
+    private readonly MarketDealFinder _marketDealFinder;
 
-    // Creates controller with route-order query service and route deal finder.
-    public MarketDealsSearchController(
-        OrderInRouteQueryService orderInRouteQueryService,
-        RouteDealFinder routeDealFinder)
+    // Creates controller with market deal finder.
+    public MarketDealsSearchController(MarketDealFinder marketDealFinder)
     {
-        _orderInRouteQueryService = orderInRouteQueryService;
-        _routeDealFinder = routeDealFinder;
+        _marketDealFinder = marketDealFinder;
     }
 
     // GET: /MarketDealsSearch
-    // Loads all chosen sell stations and buy stations, runs station-pair deal searches, and shows best step per item.
+    // Loads all chosen sell stations and buy stations, runs market deal search, and shows best step per item.
     public async Task<IActionResult> Index([FromQuery] MarketDealsSearchViewModel model)
     {
         NormalizeModel(model.Input);
@@ -59,32 +54,23 @@ public class MarketDealsSearchController : Controller
         {
             MaxTotalBuyCost = model.Input.MaxTotalBuyCost,
             MaxTotalVolumeM3 = model.Input.MaxTotalVolumeM3,
+            MinTotalProfit = model.Input.MinTotalProfit,
             MinTotalRoi = model.Input.MinTotalRoi,
+            MinProfitPerJump = model.Input.MinProfitPerJump,
             MaxSteps = model.Input.MaxSteps,
-            JumpCount = model.Input.JumpCount,
             BrokerFeeRate = model.Input.BrokerFeeRate,
             SalesTaxRate = model.Input.SalesTaxRate,
             RouteSecurityLimit = model.Input.RouteSecurityLimit
         };
 
-        var rows = new List<MarketDealsSearchRowViewModel>();
+        var routeResults = await _marketDealFinder.FindDealsAsync(
+            sellStationIds,
+            buyStationIds,
+            ToRouteSecurityPreference(model.Input.RouteSecurityLimit),
+            options);
 
-        foreach (var sellStationId in sellStationIds)
-        {
-            foreach (var buyStationId in buyStationIds)
-            {
-                var pairRows = await BuildDealRowsForStationPairAsync(
-                    sellStationId,
-                    buyStationId,
-                    options);
-
-                rows.AddRange(pairRows);
-            }
-        }
-
-        model.Result.DealRows = rows
-            .Where(x => !model.Input.MinTotalProfit.HasValue || x.TotalProfit >= model.Input.MinTotalProfit.Value)
-            .Where(x => !model.Input.MinProfitPerJump.HasValue || x.TotalProfitPerJump >= model.Input.MinProfitPerJump.Value)
+        model.Result.DealRows = routeResults
+            .SelectMany(MapRouteResultRows)
             .OrderByDescending(x => x.TotalProfit)
             .ThenBy(x => x.SellStationName)
             .ThenBy(x => x.BuyStationName)
@@ -94,26 +80,10 @@ public class MarketDealsSearchController : Controller
         return View(model);
     }
 
-    // BuildDealRowsForStationPairAsync reuses existing station-to-station route query and deal finder for one station pair.
-    private async Task<List<MarketDealsSearchRowViewModel>> BuildDealRowsForStationPairAsync(
-        long sellStationId,
-        long buyStationId,
-        DealFinderOptions options)
+    // MapRouteResultRows maps route deal result items into display rows.
+    private static IEnumerable<MarketDealsSearchRowViewModel> MapRouteResultRows(RouteDealResult routeResult)
     {
-        var route = await _orderInRouteQueryService.GetAllItemTypesOrderRouteByLocationAsync(
-            sellStationId,
-            buyStationId);
-
-        var sellStationName = ResolveSellStationName(route, sellStationId);
-        var buyStationName = ResolveBuyStationName(route, buyStationId);
-        var sellRegionId = ResolveSellRegionId(route);
-        var sellRegionName = ResolveSellRegionName(route);
-        var buyRegionId = ResolveBuyRegionId(route);
-        var buyRegionName = ResolveBuyRegionName(route);
-
-        var deals = _routeDealFinder.FindRouteDeals(route, options);
-
-        return deals.Items
+        return routeResult.Items
             .Select(item => new
             {
                 Item = item,
@@ -121,15 +91,15 @@ public class MarketDealsSearchController : Controller
             })
             .Select(x => new MarketDealsSearchRowViewModel
             {
-                SellStationId = sellStationId,
-                SellStationName = sellStationName,
-                SellRegionId = sellRegionId,
-                SellRegionName = sellRegionName,
-                BuyStationId = buyStationId,
-                BuyStationName = buyStationName,
-                BuyRegionId = buyRegionId,
-                BuyRegionName = buyRegionName,
-                JumpCount = deals.JumpCount,
+                SellStationId = routeResult.SourceLocationId ?? 0,
+                SellStationName = GetUsefulName(routeResult.SourceLocationName, routeResult.SourceLocationId),
+                SellRegionId = routeResult.SourceRegionId,
+                SellRegionName = routeResult.SourceRegionName,
+                BuyStationId = routeResult.DestinationLocationId,
+                BuyStationName = GetUsefulName(routeResult.DestinationLocationName, routeResult.DestinationLocationId),
+                BuyRegionId = routeResult.DestinationRegionId,
+                BuyRegionName = routeResult.DestinationRegionName,
+                JumpCount = routeResult.JumpCount,
                 TypeId = x.Item.TypeId,
                 TypeName = x.Item.TypeName,
                 StepCount = x.Item.Steps.Count,
@@ -143,8 +113,7 @@ public class MarketDealsSearchController : Controller
                 TotalProfitPerJump = x.BestStep.TotalProfitPerJump,
                 BestSourceSellPrice = x.Item.BestSourceSellPrice,
                 BestDestinationBuyPrice = x.Item.BestDestinationBuyPrice
-            })
-            .ToList();
+            });
     }
 
     // NormalizeModel fixes invalid or empty search defaults before running search.
@@ -152,11 +121,6 @@ public class MarketDealsSearchController : Controller
     {
         input.SellStationIdsText ??= "";
         input.BuyStationIdsText ??= "";
-
-        if (input.JumpCount <= 0)
-        {
-            input.JumpCount = 1;
-        }
 
         if (input.BrokerFeeRate < 0m)
         {
@@ -239,82 +203,27 @@ public class MarketDealsSearchController : Controller
         return $"{currentMessage} {nextMessage}";
     }
 
-    // ResolveSellStationName gets source station name from route data or known-hub fallback.
-    private static string ResolveSellStationName(AllItemTypesOrderRoute route, long sellStationId)
+    // ToRouteSecurityPreference maps deal-finder security option into route-distance security option.
+    private static RouteSecurityPreference ToRouteSecurityPreference(RouteSecurityLimit routeSecurityLimit)
     {
-        return route.Items
-            .SelectMany(x => x.SourceSellOrders)
-            .Select(x => x.LocationName)
-            .FirstOrDefault(IsUsefulName)
-            ?? GetKnownStationName(sellStationId);
-    }
-
-    // ResolveBuyStationName gets destination station name from route data or known-hub fallback.
-    private static string ResolveBuyStationName(AllItemTypesOrderRoute route, long buyStationId)
-    {
-        return route.Items
-            .SelectMany(x => x.DestinationBuyOrders)
-            .Select(x => x.LocationName)
-            .FirstOrDefault(IsUsefulName)
-            ?? GetKnownStationName(buyStationId);
-    }
-
-    // GetKnownStationName maps main trade-hub station IDs to readable names.
-    private static string GetKnownStationName(long locationId)
-    {
-        return locationId switch
+        return routeSecurityLimit switch
         {
-            60003760 => "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
-            60008494 => "Amarr VIII (Oris) - Emperor Family Academy",
-            60011866 => "Dodixie IX - Moon 20 - Federation Navy Assembly Plant",
-            60005686 => "Hek VIII - Moon 12 - Boundless Creation Factory",
-            60004588 => "Rens VI - Moon 8 - Brutor Tribe Treasury",
-            _ => locationId.ToString("N0")
+            RouteSecurityLimit.HighSecOnly => RouteSecurityPreference.Secure,
+            RouteSecurityLimit.LowSecAllowed => RouteSecurityPreference.Shortest,
+            RouteSecurityLimit.NullSecAllowed => RouteSecurityPreference.Shortest,
+            _ => RouteSecurityPreference.Shortest
         };
     }
 
-    // ResolveSellRegionId gets source region ID from loaded sell orders.
-    private static long? ResolveSellRegionId(AllItemTypesOrderRoute route)
+    // GetUsefulName returns stored name if useful, otherwise falls back to ID text.
+    private static string GetUsefulName(string name, long? id)
     {
-        return route.Items
-            .SelectMany(x => x.SourceSellOrders)
-            .Select(x => (long?)x.RegionId)
-            .FirstOrDefault();
-    }
+        if (!string.IsNullOrWhiteSpace(name) &&
+            !name.StartsWith("(unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return name;
+        }
 
-    // ResolveSellRegionName gets source region name from loaded sell orders.
-    private static string ResolveSellRegionName(AllItemTypesOrderRoute route)
-    {
-        return route.Items
-            .SelectMany(x => x.SourceSellOrders)
-            .Select(x => x.RegionName)
-            .FirstOrDefault(IsUsefulName)
-            ?? "";
-    }
-
-    // ResolveBuyRegionId gets destination region ID from loaded buy orders.
-    private static long? ResolveBuyRegionId(AllItemTypesOrderRoute route)
-    {
-        return route.Items
-            .SelectMany(x => x.DestinationBuyOrders)
-            .Select(x => (long?)x.RegionId)
-            .FirstOrDefault();
-    }
-
-    // ResolveBuyRegionName gets destination region name from loaded buy orders.
-    private static string ResolveBuyRegionName(AllItemTypesOrderRoute route)
-    {
-        return route.Items
-            .SelectMany(x => x.DestinationBuyOrders)
-            .Select(x => x.RegionName)
-            .FirstOrDefault(IsUsefulName)
-            ?? "";
-    }
-
-    // IsUsefulName skips empty and placeholder names.
-    private static bool IsUsefulName(string value)
-    {
-        return !string.IsNullOrWhiteSpace(value) &&
-               !value.StartsWith("(unknown", StringComparison.OrdinalIgnoreCase);
+        return id?.ToString("N0") ?? "";
     }
 }

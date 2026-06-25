@@ -3,15 +3,24 @@
 
 @{
     ViewBag.Title = "Market Deals Search";
+
+    var hasSearched =
+        !string.IsNullOrWhiteSpace(Model.Input.SellStationIdsText) ||
+        !string.IsNullOrWhiteSpace(Model.Input.SellRegionIdsText) ||
+        !string.IsNullOrWhiteSpace(Model.Input.BuyStationIdsText);
+
+    var hasValidSource =
+        Model.Result.SellStationCount > 0 ||
+        Model.Result.SellRegionCount > 0;
 }
 
 <h2>Market Deals Search</h2>
 
 <p>
-    Current version = station-list to station-list.<br />
-    Sell Stations = where you buy from sell orders.<br />
+    Current version = sell station/region to buy station.<br />
+    Sell Stations/Regions = where you buy from sell orders.<br />
     Buy Stations = where you sell into buy orders.<br />
-    Each result row is one item on one sell-station to buy-station route.
+    Sell regions expand into known market locations from imported data.
 </p>
 
 <form method="get" asp-action="Index" class="mb-4">
@@ -24,6 +33,14 @@
     </div>
 
     <div class="mb-3">
+        <label class="form-label">Quick Regions To Jita</label><br />
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000032', '60003760')">Sinq Laison -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000043', '60003760')">Domain -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000030', '60003760')">Heimatar -> Jita</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000042', '60003760')">Metropolis -> Jita</button>
+    </div>
+
+    <div class="mb-3">
         <label class="form-label">Quick Routes To Amarr</label><br />
         <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60011866', '60008494')">Dodixie -> Amarr</button>
         <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60003760', '60008494')">Jita -> Amarr</button>
@@ -31,11 +48,19 @@
         <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60004588', '60008494')">Rens -> Amarr</button>
     </div>
 
+    <div class="mb-3">
+        <label class="form-label">Quick Regions To Amarr</label><br />
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000032', '60008494')">Sinq Laison -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000002', '60008494')">The Forge -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000030', '60008494')">Heimatar -> Amarr</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRegionRoute('10000042', '60008494')">Metropolis -> Amarr</button>
+    </div>
+
     <div class="row g-3 mb-3">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <label asp-for="Input.SellStationIdsText" class="form-label">Sell Station IDs</label>
-            <textarea asp-for="Input.SellStationIdsText" rows="4" class="form-control"></textarea>
-            <div class="form-text mb-2">One or more station IDs. Separate by comma, space, semicolon, or newline.</div>
+            <textarea asp-for="Input.SellStationIdsText" rows="5" class="form-control"></textarea>
+            <div class="form-text mb-2">Specific sell stations. Separate by comma, space, semicolon, or newline.</div>
             <div class="mt-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60003760)">Add Jita</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellStation(60008494)">Add Amarr</button>
@@ -46,10 +71,24 @@
             </div>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-4">
+            <label asp-for="Input.SellRegionIdsText" class="form-label">Sell Region IDs</label>
+            <textarea asp-for="Input.SellRegionIdsText" rows="5" class="form-control"></textarea>
+            <div class="form-text mb-2">Source regions. Expanded into known market locations from DB.</div>
+            <div class="mt-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellRegion(10000002)">Add The Forge</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellRegion(10000043)">Add Domain</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellRegion(10000032)">Add Sinq</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellRegion(10000030)">Add Heimatar</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addSellRegion(10000042)">Add Metropolis</button>
+                <button type="button" class="btn btn-outline-danger btn-sm me-2 mb-2" onclick="clearSellRegions()">Clear</button>
+            </div>
+        </div>
+
+        <div class="col-md-4">
             <label asp-for="Input.BuyStationIdsText" class="form-label">Buy Station IDs</label>
-            <textarea asp-for="Input.BuyStationIdsText" rows="4" class="form-control"></textarea>
-            <div class="form-text mb-2">One or more station IDs. Separate by comma, space, semicolon, or newline.</div>
+            <textarea asp-for="Input.BuyStationIdsText" rows="5" class="form-control"></textarea>
+            <div class="form-text mb-2">Destination buy stations. Separate by comma, space, semicolon, or newline.</div>
             <div class="mt-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60003760)">Add Jita</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="addBuyStation(60008494)">Add Amarr</button>
@@ -119,25 +158,25 @@
     <button type="submit" class="btn btn-primary">Find Deals</button>
 </form>
 
-@if (!string.IsNullOrWhiteSpace(Model.Result.SearchMessage))
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {
     <div class="alert alert-warning">
-        @Model.Result.SearchMessage
+        @Model.ErrorMessage
     </div>
 }
 
-@if (Model.Result.HasSearched)
+@if (hasSearched)
 {
     <p>
         Sell Stations: @Model.Result.SellStationCount.ToString("N0")<br />
-        Buy Stations: @Model.Result.BuyStationCount.ToString("N0")<br />
-        Route Pairs: @Model.Result.RoutePairCount.ToString("N0")
+        Sell Regions: @Model.Result.SellRegionCount.ToString("N0")<br />
+        Buy Stations: @Model.Result.BuyStationCount.ToString("N0")
     </p>
 }
 
-@if (Model.Result.DealRows.Count == 0)
+@if (Model.Result.Rows.Count == 0)
 {
-    if (Model.Result.HasSearched && Model.Result.SellStationCount > 0 && Model.Result.BuyStationCount > 0)
+    if (hasSearched && hasValidSource && Model.Result.BuyStationCount > 0)
     {
         <p>No matching deals.</p>
     }
@@ -169,25 +208,15 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var row in Model.Result.DealRows)
+                @foreach (var row in Model.Result.Rows)
                 {
                     <tr>
                         <td>@row.TypeId.ToString("N0")</td>
                         <td>@row.TypeName</td>
-                        <td>@row.SellStationName (@row.SellStationId.ToString("N0"))</td>
-                        <td>
-                            @if (row.SellRegionId.HasValue)
-                            {
-                                @($"{row.SellRegionName} ({row.SellRegionId.Value.ToString("N0")})")
-                            }
-                        </td>
-                        <td>@row.BuyStationName (@row.BuyStationId.ToString("N0"))</td>
-                        <td>
-                            @if (row.BuyRegionId.HasValue)
-                            {
-                                @($"{row.BuyRegionName} ({row.BuyRegionId.Value.ToString("N0")})")
-                            }
-                        </td>
+                        <td>@FormatNamedId(row.SellStationName, row.SellStationId)</td>
+                        <td>@FormatNamedId(row.SellRegionName, row.SellRegionId)</td>
+                        <td>@FormatNamedId(row.BuyStationName, row.BuyStationId)</td>
+                        <td>@FormatNamedId(row.BuyRegionName, row.BuyRegionId)</td>
                         <td>@row.JumpCount.ToString("N0")</td>
                         <td>@row.StepCount.ToString("N0")</td>
                         <td>@row.TotalUnits.ToString("N0")</td>
@@ -198,8 +227,8 @@ else
                         <td>@row.TotalRoi.ToString("P2")</td>
                         <td>@row.TotalProfitPerVolumeM3.ToString("N2")</td>
                         <td>@row.TotalProfitPerJump.ToString("N2")</td>
-                        <td>@(row.BestSourceSellPrice.HasValue ? row.BestSourceSellPrice.Value.ToString("N2") : "0.00")</td>
-                        <td>@(row.BestDestinationBuyPrice.HasValue ? row.BestDestinationBuyPrice.Value.ToString("N2") : "0.00")</td>
+                        <td>@(row.BestSellPrice.HasValue ? row.BestSellPrice.Value.ToString("N2") : "")</td>
+                        <td>@(row.BestBuyPrice.HasValue ? row.BestBuyPrice.Value.ToString("N2") : "")</td>
                     </tr>
                 }
             </tbody>
@@ -210,26 +239,41 @@ else
 <script>
     function setRoute(sellStationIds, buyStationIds) {
         document.getElementById('Input_SellStationIdsText').value = sellStationIds;
+        document.getElementById('Input_SellRegionIdsText').value = '';
+        document.getElementById('Input_BuyStationIdsText').value = buyStationIds;
+    }
+
+    function setRegionRoute(sellRegionIds, buyStationIds) {
+        document.getElementById('Input_SellStationIdsText').value = '';
+        document.getElementById('Input_SellRegionIdsText').value = sellRegionIds;
         document.getElementById('Input_BuyStationIdsText').value = buyStationIds;
     }
 
     function addSellStation(id) {
-        appendStationId('Input_SellStationIdsText', id);
+        appendId('Input_SellStationIdsText', id);
+    }
+
+    function addSellRegion(id) {
+        appendId('Input_SellRegionIdsText', id);
     }
 
     function addBuyStation(id) {
-        appendStationId('Input_BuyStationIdsText', id);
+        appendId('Input_BuyStationIdsText', id);
     }
 
     function clearSellStations() {
         document.getElementById('Input_SellStationIdsText').value = '';
     }
 
+    function clearSellRegions() {
+        document.getElementById('Input_SellRegionIdsText').value = '';
+    }
+
     function clearBuyStations() {
         document.getElementById('Input_BuyStationIdsText').value = '';
     }
 
-    function appendStationId(elementId, id) {
+    function appendId(elementId, id) {
         const element = document.getElementById(elementId);
         const idText = id.toString();
         const parts = element.value
@@ -244,3 +288,20 @@ else
         element.value = parts.join('\n');
     }
 </script>
+
+@functions {
+    private static string FormatNamedId(string name, long? id)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && id.HasValue)
+        {
+            return $"{name} ({id.Value:N0})";
+        }
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        return id.HasValue ? id.Value.ToString("N0") : "";
+    }
+}

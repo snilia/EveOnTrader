@@ -18,34 +18,47 @@ public class MarketDealsSearchController : Controller
     }
 
     // GET: /MarketDealsSearch
-    // Loads all chosen sell stations and buy stations, runs market deal search, and shows best step per item.
+    // Loads chosen sell stations/regions and buy stations, runs market deal search, and shows best step per item.
     public async Task<IActionResult> Index([FromQuery] MarketDealsSearchViewModel model)
     {
         NormalizeModel(model.Input);
 
-        var sellStationIds = ParseStationIds(model.Input.SellStationIdsText, out var invalidSellStationIds);
-        var buyStationIds = ParseStationIds(model.Input.BuyStationIdsText, out var invalidBuyStationIds);
+        var sellStationIds = ParseIds(model.Input.SellStationIdsText, out var invalidSellStationIds);
+        var sellRegionIds = ParseIds(model.Input.SellRegionIdsText, out var invalidSellRegionIds);
+        var buyStationIds = ParseIds(model.Input.BuyStationIdsText, out var invalidBuyStationIds);
 
-        model.Result.HasSearched = HasAnyStationInput(model.Input);
         model.Result.SellStationCount = sellStationIds.Count;
+        model.Result.SellRegionCount = sellRegionIds.Count;
         model.Result.BuyStationCount = buyStationIds.Count;
-        model.Result.RoutePairCount = sellStationIds.Count * buyStationIds.Count;
 
-        if (invalidSellStationIds.Count > 0 || invalidBuyStationIds.Count > 0)
+
+        if (invalidSellStationIds.Count > 0 || invalidSellRegionIds.Count > 0 || invalidBuyStationIds.Count > 0)
         {
-            model.Result.SearchMessage = BuildInvalidStationMessage(invalidSellStationIds, invalidBuyStationIds);
+            model.ErrorMessage = BuildInvalidIdMessage(
+                invalidSellStationIds,
+                invalidSellRegionIds,
+                invalidBuyStationIds);
         }
 
-        if (!model.Result.HasSearched)
+        if (!HasAnySearchInput(model.Input))
         {
             return View(model);
         }
 
-        if (sellStationIds.Count == 0 || buyStationIds.Count == 0)
+        if (sellStationIds.Count == 0 && sellRegionIds.Count == 0)
         {
-            model.Result.SearchMessage = AppendMessage(
-                model.Result.SearchMessage,
-                "Enter at least one sell station and one buy station.");
+            model.ErrorMessage = AppendMessage(
+                model.ErrorMessage,
+                "Enter at least one sell station or sell region.");
+
+            return View(model);
+        }
+
+        if (buyStationIds.Count == 0)
+        {
+            model.ErrorMessage = AppendMessage(
+                model.ErrorMessage,
+                "Enter at least one buy station.");
 
             return View(model);
         }
@@ -65,11 +78,12 @@ public class MarketDealsSearchController : Controller
 
         var routeResults = await _marketDealFinder.FindDealsAsync(
             sellStationIds,
+            sellRegionIds,
             buyStationIds,
             ToRouteSecurityPreference(model.Input.RouteSecurityLimit),
             options);
 
-        model.Result.DealRows = routeResults
+        model.Result.Rows = routeResults
             .SelectMany(MapRouteResultRows)
             .OrderByDescending(x => x.TotalProfit)
             .ThenBy(x => x.SellStationName)
@@ -91,18 +105,22 @@ public class MarketDealsSearchController : Controller
             })
             .Select(x => new MarketDealsSearchRowViewModel
             {
-                SellStationId = routeResult.SourceLocationId ?? 0,
+                SellStationId = routeResult.SourceLocationId,
                 SellStationName = GetUsefulName(routeResult.SourceLocationName, routeResult.SourceLocationId),
                 SellRegionId = routeResult.SourceRegionId,
                 SellRegionName = routeResult.SourceRegionName,
+
                 BuyStationId = routeResult.DestinationLocationId,
                 BuyStationName = GetUsefulName(routeResult.DestinationLocationName, routeResult.DestinationLocationId),
                 BuyRegionId = routeResult.DestinationRegionId,
                 BuyRegionName = routeResult.DestinationRegionName,
+
                 JumpCount = routeResult.JumpCount,
+
                 TypeId = x.Item.TypeId,
                 TypeName = x.Item.TypeName,
                 StepCount = x.Item.Steps.Count,
+
                 TotalUnits = x.BestStep.TotalUnits,
                 TotalVolumeM3 = x.BestStep.TotalVolumeM3,
                 TotalBuyCost = x.BestStep.TotalBuyCost,
@@ -111,8 +129,9 @@ public class MarketDealsSearchController : Controller
                 TotalRoi = x.BestStep.TotalRoi,
                 TotalProfitPerVolumeM3 = x.BestStep.TotalProfitPerVolumeM3,
                 TotalProfitPerJump = x.BestStep.TotalProfitPerJump,
-                BestSourceSellPrice = x.Item.BestSourceSellPrice,
-                BestDestinationBuyPrice = x.Item.BestDestinationBuyPrice
+
+                BestSellPrice = x.Item.BestSourceSellPrice,
+                BestBuyPrice = x.Item.BestDestinationBuyPrice
             });
     }
 
@@ -120,6 +139,7 @@ public class MarketDealsSearchController : Controller
     private static void NormalizeModel(MarketDealsSearchInputViewModel input)
     {
         input.SellStationIdsText ??= "";
+        input.SellRegionIdsText ??= "";
         input.BuyStationIdsText ??= "";
 
         if (input.BrokerFeeRate < 0m)
@@ -133,15 +153,16 @@ public class MarketDealsSearchController : Controller
         }
     }
 
-    // HasAnyStationInput returns true after user enters at least one station input.
-    private static bool HasAnyStationInput(MarketDealsSearchInputViewModel input)
+    // HasAnySearchInput returns true after user enters at least one search input.
+    private static bool HasAnySearchInput(MarketDealsSearchInputViewModel input)
     {
         return !string.IsNullOrWhiteSpace(input.SellStationIdsText) ||
+               !string.IsNullOrWhiteSpace(input.SellRegionIdsText) ||
                !string.IsNullOrWhiteSpace(input.BuyStationIdsText);
     }
 
-    // ParseStationIds parses comma, space, semicolon, or newline separated station IDs.
-    private static List<long> ParseStationIds(string value, out List<string> invalidParts)
+    // ParseIds parses comma, space, semicolon, or newline separated IDs.
+    private static List<long> ParseIds(string value, out List<string> invalidParts)
     {
         invalidParts = [];
 
@@ -150,16 +171,16 @@ public class MarketDealsSearchController : Controller
             return [];
         }
 
-        var stationIds = new List<long>();
+        var ids = new List<long>();
         var parts = value.Split(
             [',', ';', '\r', '\n', '\t', ' '],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         foreach (var part in parts)
         {
-            if (long.TryParse(part, out var stationId) && stationId > 0)
+            if (long.TryParse(part, out var id) && id > 0)
             {
-                stationIds.Add(stationId);
+                ids.Add(id);
             }
             else
             {
@@ -167,14 +188,15 @@ public class MarketDealsSearchController : Controller
             }
         }
 
-        return stationIds
+        return ids
             .Distinct()
             .ToList();
     }
 
-    // BuildInvalidStationMessage builds one user-facing message for invalid station ID tokens.
-    private static string BuildInvalidStationMessage(
+    // BuildInvalidIdMessage builds one user-facing message for invalid ID tokens.
+    private static string BuildInvalidIdMessage(
         List<string> invalidSellStationIds,
+        List<string> invalidSellRegionIds,
         List<string> invalidBuyStationIds)
     {
         var parts = new List<string>();
@@ -182,6 +204,11 @@ public class MarketDealsSearchController : Controller
         if (invalidSellStationIds.Count > 0)
         {
             parts.Add($"Invalid sell station IDs: {string.Join(", ", invalidSellStationIds)}.");
+        }
+
+        if (invalidSellRegionIds.Count > 0)
+        {
+            parts.Add($"Invalid sell region IDs: {string.Join(", ", invalidSellRegionIds)}.");
         }
 
         if (invalidBuyStationIds.Count > 0)
@@ -193,7 +220,7 @@ public class MarketDealsSearchController : Controller
     }
 
     // AppendMessage combines validation/search messages.
-    private static string AppendMessage(string currentMessage, string nextMessage)
+    private static string AppendMessage(string? currentMessage, string nextMessage)
     {
         if (string.IsNullOrWhiteSpace(currentMessage))
         {

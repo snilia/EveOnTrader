@@ -6,68 +6,107 @@ namespace EveOnTrader.Core.DealFinding.Services;
 // MarketDealFinder finds deals for many source locations and many destination locations.
 public class MarketDealFinder
 {
-    private readonly IStationToStationOrderRouteQuery _orderRouteQuery;
     private readonly IRegionToLocationsQuery _regionToLocationsQuery;
+    private readonly IMultiLocationMarketOrderQuery _multiLocationMarketOrderQuery;
+    private readonly IBulkDistanceFinder _bulkDistanceFinder;
+    private readonly StationToStationMarketOrdersBuilder _stationToStationMarketOrdersBuilder;
     private readonly StationToStationDealFinder _stationToStationDealFinder;
 
-    // Creates market deal finder with order route query, region-to-locations query, and station-to-station deal finder.
+    // Creates market deal finder with queries, builders, and station-to-station deal finder.
     public MarketDealFinder(
-        IStationToStationOrderRouteQuery orderRouteQuery,
-        IRegionToLocationsQuery regionToLocationsQuery,
-        StationToStationDealFinder stationToStationDealFinder)
+        IRegionToLocationsQuery regionToLocationsQuery, //turns source region IDs into station/location IDs
+        IMultiLocationMarketOrderQuery multiLocationMarketOrderQuery, //loads all source sell orders and destination buy orders in bulk
+        IBulkDistanceFinder bulkDistanceFinder, //gets jump counts for all source/destination station pairs
+        StationToStationMarketOrdersBuilder stationToStationMarketOrdersBuilder, //turns bulk orders into route objects
+        StationToStationDealFinder stationToStationDealFinder) //finds deals for one source/destination station pair
     {
-        _orderRouteQuery = orderRouteQuery;
         _regionToLocationsQuery = regionToLocationsQuery;
+        _multiLocationMarketOrderQuery = multiLocationMarketOrderQuery;
+        _bulkDistanceFinder = bulkDistanceFinder;
+        _stationToStationMarketOrdersBuilder = stationToStationMarketOrdersBuilder;
         _stationToStationDealFinder = stationToStationDealFinder;
     }
 
     // FindDealsAsync finds all station-to-station deal results for every source/destination location pair.
     public async Task<List<RouteDealResult>> FindDealsAsync(
-        List<long> sourceLocationIds,
+        List<long> sourceLocationIds, 
         List<long> sourceRegionIds,
         List<long> destinationLocationIds,
         RouteSecurityPreference routeSecurityPreference,
         DealFinderOptions? options = null,
         DateTime? importedAfterUtc = null)
     {
+        ArgumentNullException.ThrowIfNull(sourceLocationIds);
+        ArgumentNullException.ThrowIfNull(sourceRegionIds);
+        ArgumentNullException.ThrowIfNull(destinationLocationIds);
+
         options ??= new DealFinderOptions();
 
         var sourceLocationIdsFromRegions = await _regionToLocationsQuery.GetLocationIdsInRegionsAsync(sourceRegionIds);
 
-        var distinctSourceLocationIds = sourceLocationIds
-            .Concat(sourceLocationIdsFromRegions)
-            .Where(x => x > 0)
-            .Distinct()
-            .ToList();
+        var distinctSourceLocationIds = NormalizeLocationIds(
+            sourceLocationIds.Concat(sourceLocationIdsFromRegions));
 
-        var distinctDestinationLocationIds = destinationLocationIds
-            .Where(x => x > 0)
-            .Distinct()
-            .ToList();
+        var distinctDestinationLocationIds = NormalizeLocationIds(destinationLocationIds);
+
+        if (distinctSourceLocationIds.Count == 0 || distinctDestinationLocationIds.Count == 0)
+        {
+            return [];
+        }
+
+        var marketOrderRows = await _multiLocationMarketOrderQuery.GetMarketOrderRowsAsync(
+            distinctSourceLocationIds,
+            distinctDestinationLocationIds,
+            importedAfterUtc);
+
+        var jumpCounts = await _bulkDistanceFinder.GetJumpCountsAsync(
+            distinctSourceLocationIds,
+            distinctDestinationLocationIds,
+            routeSecurityPreference);
 
         var routeResults = new List<RouteDealResult>();
 
-        foreach (var sourceLocationId in distinctSourceLocationIds)
+        var routes = _stationToStationMarketOrdersBuilder.BuildRoutes(
+            marketOrderRows,
+            distinctSourceLocationIds,
+            distinctDestinationLocationIds,
+            importedAfterUtc);
+
+        foreach (var route in routes)
         {
-            foreach (var destinationLocationId in distinctDestinationLocationIds)
+            if (!route.SourceLocationId.HasValue)
             {
-                var route = await _orderRouteQuery.GetAllItemTypesOrderRouteAsync(
-                    sourceLocationId,
-                    destinationLocationId,
-                    importedAfterUtc);
+                continue;
+            }
 
-                var routeResult = await _stationToStationDealFinder.FindDealsAsync(
-                    route,
-                    routeSecurityPreference,
-                    options);
+            if (!jumpCounts.TryGetValue(
+                    (route.SourceLocationId.Value, route.DestinationLocationId),
+                    out var jumpCount) ||
+                !jumpCount.HasValue)
+            {
+                continue;
+            }
 
-                if (routeResult.Items.Count > 0)
-                {
-                    routeResults.Add(routeResult);
-                }
+            var routeResult = _stationToStationDealFinder.FindDeals(
+                route,
+                jumpCount.Value,
+                options);
+
+            if (routeResult.Items.Count > 0)
+            {
+                routeResults.Add(routeResult);
             }
         }
 
         return routeResults;
+    }
+
+    // NormalizeLocationIds removes invalid and duplicate location IDs.
+    private static List<long> NormalizeLocationIds(IEnumerable<long> locationIds)
+    {
+        return locationIds
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
     }
 }

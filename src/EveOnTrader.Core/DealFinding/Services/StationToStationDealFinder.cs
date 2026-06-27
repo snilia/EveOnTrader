@@ -1,6 +1,5 @@
 ﻿using EveOnTrader.Core.DealFinding.Models;
 using EveOnTrader.Core.ReadModels;
-using EveOnTrader.Core.RouteFinding;
 
 namespace EveOnTrader.Core.DealFinding.Services;
 
@@ -8,21 +7,17 @@ namespace EveOnTrader.Core.DealFinding.Services;
 public class StationToStationDealFinder
 {
     private readonly ItemRouteDealFinder _itemRouteDealFinder;
-    private readonly IRouteDistanceService _routeDistanceService;
 
-    // Creates station-to-station deal finder with item deal finder and route distance service.
-    public StationToStationDealFinder(
-        ItemRouteDealFinder itemRouteDealFinder,
-        IRouteDistanceService routeDistanceService)
+    // Creates station-to-station deal finder with item deal finder.
+    public StationToStationDealFinder(ItemRouteDealFinder itemRouteDealFinder)
     {
         _itemRouteDealFinder = itemRouteDealFinder;
-        _routeDistanceService = routeDistanceService;
     }
 
-    // FindDealsAsync gets jump count once for the station pair, then runs item deal finder for every item.
-    public async Task<RouteDealResult> FindDealsAsync(
+    // FindDeals finds item deals for one station pair using already-known jump count.
+    public RouteDealResult FindDeals(
         AllItemTypesOrderRoute route,
-        RouteSecurityPreference routeSecurityPreference,
+        int jumpCount,
         DealFinderOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -34,17 +29,7 @@ public class StationToStationDealFinder
             return BuildEmptyRouteDealResult(route);
         }
 
-        var jumpCount = await _routeDistanceService.GetJumpCountAsync(
-            route.SourceLocationId.Value,
-            route.DestinationLocationId,
-            routeSecurityPreference);
-
-        if (!jumpCount.HasValue)
-        {
-            return BuildEmptyRouteDealResult(route);
-        }
-
-        var safeJumpCount = jumpCount.Value > 0 ? jumpCount.Value : 1;
+        var safeJumpCount = jumpCount > 0 ? jumpCount : 1;
         var items = new List<ItemDealResult>();
 
         foreach (var itemRoute in route.Items)

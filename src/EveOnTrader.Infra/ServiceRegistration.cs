@@ -19,8 +19,9 @@ public static class ServiceRegistration
         services.AddScoped<OrderInRouteQueryService>();
         services.AddScoped<IStationToStationOrderRouteQuery, OrderInRouteQueryService>();
         services.AddScoped<IRegionToLocationsQuery, RegionToLocationsQuery>();
-        services.AddScoped<IBulkDistanceFinder, BulkDistanceFinder>();
+        services.AddScoped<IMultiLocationMarketOrderQuery, MultiLocationMarketOrderQuery>();
         services.AddScoped<IRouteDistanceService, RouteDistanceService>();
+        services.AddScoped<IBulkDistanceFinder, BulkDistanceFinder>();
 
         return services;
     }

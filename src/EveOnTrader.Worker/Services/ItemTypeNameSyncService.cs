@@ -68,7 +68,7 @@ public class ItemTypeNameSyncService
             {
                 TypeId = typeId,
                 Name = typeResult.Name,
-                VolumeM3 = typeResult.VolumeM3
+                VolumeM3 = GetMarketVolumeM3(typeResult)
             });
 
             processed++;
@@ -88,5 +88,13 @@ public class ItemTypeNameSyncService
 
         Console.WriteLine($"Inserted {refsToInsert.Count:n0} new ItemTypeRef rows.");
         return refsToInsert.Count;
+    }
+
+    // GetMarketVolumeM3 returns packaged volume when ESI provides it, otherwise normal type volume.
+    private static decimal GetMarketVolumeM3(UniverseTypeResult typeResult)
+    {
+        return typeResult.PackagedVolumeM3 > 0m
+            ? typeResult.PackagedVolumeM3
+            : typeResult.VolumeM3;
     }
 }

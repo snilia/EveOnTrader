@@ -13,4 +13,7 @@ public class UniverseTypeResult
 
     [JsonPropertyName("volume")]
     public decimal VolumeM3 { get; set; }
+
+    [JsonPropertyName("packaged_volume")]
+    public decimal PackagedVolumeM3 { get; set; }
 }

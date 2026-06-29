@@ -1,5 +1,6 @@
-﻿@model EveOnTrader.Web.Models.MarketDealsSearchViewModel
+﻿@using System.Globalization
 @using EveOnTrader.Core.DealFinding.Models
+@model EveOnTrader.Web.Models.MarketDealsSearchViewModel
 
 @{
     ViewBag.Title = "Market Deals Search";
@@ -187,6 +188,7 @@ else
         <table class="table table-striped table-sm">
             <thead>
                 <tr>
+                    <th>Details</th>
                     <th>TypeId</th>
                     <th>Type</th>
                     <th>Sell Station</th>
@@ -211,6 +213,18 @@ else
                 @foreach (var row in Model.Result.Rows)
                 {
                     <tr>
+                        <td>
+                            <a class="btn btn-outline-primary btn-sm"
+                               asp-controller="MarketDealDetails"
+                               asp-action="Index"
+                               asp-route-typeId="@row.TypeId"
+                               asp-route-sourceLocationId="@row.SellStationId"
+                               asp-route-destinationLocationId="@row.BuyStationId"
+                               asp-route-salesTaxRate="@(Model.Input.SalesTaxRate.ToString(CultureInfo.InvariantCulture))"
+                               asp-route-brokerFeeRate="@(Model.Input.BrokerFeeRate.ToString(CultureInfo.InvariantCulture))">
+                                Details
+                            </a>
+                        </td>
                         <td>@row.TypeId.ToString("N0")</td>
                         <td>@row.TypeName</td>
                         <td>@FormatNamedId(row.SellStationName, row.SellStationId)</td>

@@ -1,0 +1,288 @@
+﻿@using System.Globalization
+@model EveOnTrader.Web.Models.MarketDealDetailsViewModel
+
+@{
+    ViewBag.Title = "Market Deal Details";
+}
+
+<h2>Market Deal Details</h2>
+
+<p>
+    <strong>@Model.TypeName</strong> (@Model.TypeId.ToString("N0"))<br />
+    Unit Volume: @Model.UnitVolumeM3.ToString("N2") m3<br />
+    Source: @Model.SourceLocationName (@Model.SourceLocationId.ToString("N0")) - @Model.SourceRegionName<br />
+    Destination: @Model.DestinationLocationName (@Model.DestinationLocationId.ToString("N0")) - @Model.DestinationRegionName<br />
+    Sales Tax: @Model.SalesTaxRate.ToString("P2")<br />
+    Broker Fee: @Model.BrokerFeeRate.ToString("P2")
+</p>
+
+<div class="alert alert-info">
+    Select one source sell row and one destination buy row to estimate trade result.
+    Estimate uses clicked boundary prices, not exact multi-order slice matching.
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">Selected Estimate</div>
+    <div class="card-body">
+        <div id="selectionMessage">Select source sell and destination buy rows.</div>
+
+        <table class="table table-sm mt-3 mb-0">
+            <tbody>
+                <tr>
+                    <th>Matched Units</th>
+                    <td id="estimateMatchedUnits">-</td>
+                </tr>
+                <tr>
+                    <th>Matched Volume</th>
+                    <td id="estimateMatchedVolume">-</td>
+                </tr>
+                <tr>
+                    <th>Source Price</th>
+                    <td id="estimateSourcePrice">-</td>
+                </tr>
+                <tr>
+                    <th>Destination Net Buy Price</th>
+                    <td id="estimateDestinationPrice">-</td>
+                </tr>
+                <tr>
+                    <th>Profit / Unit</th>
+                    <td id="estimateProfitPerUnit">-</td>
+                </tr>
+                <tr>
+                    <th>Total Profit</th>
+                    <td id="estimateTotalProfit">-</td>
+                </tr>
+                <tr>
+                    <th>ROI</th>
+                    <td id="estimateRoi">-</td>
+                </tr>
+                <tr>
+                    <th>Profit / m3</th>
+                    <td id="estimateProfitPerM3">-</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <h3>Source Sell Orders</h3>
+
+        <div class="table-responsive mb-4">
+            <table class="table table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Price</th>
+                        <th>Remain</th>
+                        <th>Cumulative</th>
+                        <th>Min</th>
+                        <th>Range</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.SourceSellOrders)
+                    {
+                        <tr data-book="source-sell"
+                            data-price="@(order.Price.ToString(CultureInfo.InvariantCulture))"
+                            data-cumulative-units="@order.CumulativeVolumeRemain"
+                            style="cursor:pointer">
+                            <td>@order.Price.ToString("N2")</td>
+                            <td>@order.VolumeRemain.ToString("N0")</td>
+                            <td>@order.CumulativeVolumeRemain.ToString("N0")</td>
+                            <td>@order.MinVolume.ToString("N0")</td>
+                            <td>@order.Range</td>
+                            <td>@order.Issued.ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Source Buy Orders</h3>
+
+        <div class="table-responsive mb-4">
+            <table class="table table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Price</th>
+                        <th>Remain</th>
+                        <th>Cumulative</th>
+                        <th>Min</th>
+                        <th>Range</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.SourceBuyOrders)
+                    {
+                        <tr>
+                            <td>@order.Price.ToString("N2")</td>
+                            <td>@order.VolumeRemain.ToString("N0")</td>
+                            <td>@order.CumulativeVolumeRemain.ToString("N0")</td>
+                            <td>@order.MinVolume.ToString("N0")</td>
+                            <td>@order.Range</td>
+                            <td>@order.Issued.ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <h3>Destination Buy Orders</h3>
+
+        <div class="table-responsive mb-4">
+            <table class="table table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Price</th>
+                        <th>Net After Tax</th>
+                        <th>Remain</th>
+                        <th>Cumulative</th>
+                        <th>Min</th>
+                        <th>Range</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.DestinationBuyOrders)
+                    {
+                        <tr data-book="destination-buy"
+                            data-net-immediate-price="@(order.NetImmediateSellPrice.ToString(CultureInfo.InvariantCulture))"
+                            data-cumulative-units="@order.CumulativeVolumeRemain"
+                            style="cursor:pointer">
+                            <td>@order.Price.ToString("N2")</td>
+                            <td>@order.NetImmediateSellPrice.ToString("N2")</td>
+                            <td>@order.VolumeRemain.ToString("N0")</td>
+                            <td>@order.CumulativeVolumeRemain.ToString("N0")</td>
+                            <td>@order.MinVolume.ToString("N0")</td>
+                            <td>@order.Range</td>
+                            <td>@order.Issued.ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Destination Sell Orders</h3>
+
+        <div class="table-responsive mb-4">
+            <table class="table table-striped table-sm">
+                <thead>
+                    <tr>
+                        <th>Price</th>
+                        <th>Net After Tax + Broker</th>
+                        <th>Remain</th>
+                        <th>Cumulative</th>
+                        <th>Min</th>
+                        <th>Range</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in Model.DestinationSellOrders)
+                    {
+                        <tr>
+                            <td>@order.Price.ToString("N2")</td>
+                            <td>@order.NetSellOrderPrice.ToString("N2")</td>
+                            <td>@order.VolumeRemain.ToString("N0")</td>
+                            <td>@order.CumulativeVolumeRemain.ToString("N0")</td>
+                            <td>@order.MinVolume.ToString("N0")</td>
+                            <td>@order.Range</td>
+                            <td>@order.Issued.ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const unitVolumeM3 = Number('@(Model.UnitVolumeM3.ToString(CultureInfo.InvariantCulture))');
+    let selectedSourceSell = null;
+    let selectedDestinationBuy = null;
+
+    document.querySelectorAll('tr[data-book="source-sell"]').forEach(row => {
+        row.addEventListener('click', () => {
+            clearSelectedRows('source-sell');
+            row.classList.add('table-primary');
+
+            selectedSourceSell = {
+                price: Number(row.dataset.price),
+                cumulativeUnits: Number(row.dataset.cumulativeUnits)
+            };
+
+            updateEstimate();
+        });
+    });
+
+    document.querySelectorAll('tr[data-book="destination-buy"]').forEach(row => {
+        row.addEventListener('click', () => {
+            clearSelectedRows('destination-buy');
+            row.classList.add('table-primary');
+
+            selectedDestinationBuy = {
+                netPrice: Number(row.dataset.netImmediatePrice),
+                cumulativeUnits: Number(row.dataset.cumulativeUnits)
+            };
+
+            updateEstimate();
+        });
+    });
+
+    // Clear previous selection highlight when clicking a different line
+    function clearSelectedRows(bookName) {
+        document.querySelectorAll(`tr[data-book="${bookName}"]`).forEach(row => {
+            row.classList.remove('table-primary');
+        });
+    }
+
+    // Recalculate and display estimate after selected source/destination rows change.
+    function updateEstimate() {
+        if (!selectedSourceSell || !selectedDestinationBuy) {
+            document.getElementById('selectionMessage').innerText = 'Select source sell and destination buy rows.';
+            return;
+        }
+
+        const matchedUnits = Math.min(
+            selectedSourceSell.cumulativeUnits,
+            selectedDestinationBuy.cumulativeUnits);
+
+        const matchedVolumeM3 = matchedUnits * unitVolumeM3;
+        const profitPerUnit = selectedDestinationBuy.netPrice - selectedSourceSell.price;
+        const totalProfit = matchedUnits * profitPerUnit;
+        const roi = selectedSourceSell.price > 0 ? profitPerUnit / selectedSourceSell.price : 0;
+        const profitPerM3 = matchedVolumeM3 > 0 ? totalProfit / matchedVolumeM3 : 0;
+
+        document.getElementById('selectionMessage').innerText = 'Estimate calculated from selected boundary rows.';
+        document.getElementById('estimateMatchedUnits').innerText = formatNumber(matchedUnits, 0);
+        document.getElementById('estimateMatchedVolume').innerText = `${formatNumber(matchedVolumeM3, 2)} m3`;
+        document.getElementById('estimateSourcePrice').innerText = formatNumber(selectedSourceSell.price, 2);
+        document.getElementById('estimateDestinationPrice').innerText = formatNumber(selectedDestinationBuy.netPrice, 2);
+        document.getElementById('estimateProfitPerUnit').innerText = formatNumber(profitPerUnit, 2);
+        document.getElementById('estimateTotalProfit').innerText = formatNumber(totalProfit, 2);
+        document.getElementById('estimateRoi').innerText = formatPercent(roi);
+        document.getElementById('estimateProfitPerM3').innerText = formatNumber(profitPerM3, 2);
+    }
+
+    // Formats number with commas and fixed decimal count for display.
+    function formatNumber(value, decimals) {
+        return value.toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        });
+    }
+
+    // Formats decimal ratio as percent for display. Example: 0.12 -> 12.00%.
+    function formatPercent(value) {
+        return value.toLocaleString(undefined, {
+            style: 'percent',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+</script>

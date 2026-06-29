@@ -17,14 +17,15 @@
 </p>
 
 <div class="alert alert-info">
-    Select one source sell row and one destination buy row to estimate trade result.
+    Select one source sell row and either one destination buy row or one destination sell row.
+    Destination buy estimates immediate sale into buy orders. Destination sell estimates listing at that price.
     Estimate uses clicked boundary prices, not exact multi-order slice matching.
 </div>
 
 <div class="card mb-4">
     <div class="card-header">Selected Estimate</div>
     <div class="card-body">
-        <div id="selectionMessage">Select source sell and destination buy rows.</div>
+        <div id="selectionMessage">Select source sell and destination buy/sell row.</div>
 
         <table class="table table-sm mt-3 mb-0">
             <tbody>
@@ -41,7 +42,7 @@
                     <td id="estimateSourcePrice">-</td>
                 </tr>
                 <tr>
-                    <th>Destination Net Buy Price</th>
+                    <th>Destination Net Price</th>
                     <td id="estimateDestinationPrice">-</td>
                 </tr>
                 <tr>
@@ -151,7 +152,7 @@
                     @foreach (var order in Model.DestinationBuyOrders)
                     {
                         <tr data-book="destination-buy"
-                            data-net-immediate-price="@(order.NetImmediateSellPrice.ToString(CultureInfo.InvariantCulture))"
+                            data-net-price="@(order.NetImmediateSellPrice.ToString(CultureInfo.InvariantCulture))"
                             data-cumulative-units="@order.CumulativeVolumeRemain"
                             style="cursor:pointer">
                             <td>@order.Price.ToString("N2")</td>
@@ -185,7 +186,9 @@
                 <tbody>
                     @foreach (var order in Model.DestinationSellOrders)
                     {
-                        <tr>
+                        <tr data-book="destination-sell"
+                            data-net-price="@(order.NetSellOrderPrice.ToString(CultureInfo.InvariantCulture))"
+                            style="cursor:pointer">
                             <td>@order.Price.ToString("N2")</td>
                             <td>@order.NetSellOrderPrice.ToString("N2")</td>
                             <td>@order.VolumeRemain.ToString("N0")</td>
@@ -204,7 +207,7 @@
 <script>
     const unitVolumeM3 = Number('@(Model.UnitVolumeM3.ToString(CultureInfo.InvariantCulture))');
     let selectedSourceSell = null;
-    let selectedDestinationBuy = null;
+    let selectedDestination = null;
 
     document.querySelectorAll('tr[data-book="source-sell"]').forEach(row => {
         row.addEventListener('click', () => {
@@ -223,10 +226,12 @@
     document.querySelectorAll('tr[data-book="destination-buy"]').forEach(row => {
         row.addEventListener('click', () => {
             clearSelectedRows('destination-buy');
+            clearSelectedRows('destination-sell');
             row.classList.add('table-primary');
 
-            selectedDestinationBuy = {
-                netPrice: Number(row.dataset.netImmediatePrice),
+            selectedDestination = {
+                kind: 'buy',
+                netPrice: Number(row.dataset.netPrice),
                 cumulativeUnits: Number(row.dataset.cumulativeUnits)
             };
 
@@ -234,7 +239,22 @@
         });
     });
 
-    // Clear previous selection highlight when clicking a different line
+    document.querySelectorAll('tr[data-book="destination-sell"]').forEach(row => {
+        row.addEventListener('click', () => {
+            clearSelectedRows('destination-buy');
+            clearSelectedRows('destination-sell');
+            row.classList.add('table-primary');
+
+            selectedDestination = {
+                kind: 'sell',
+                netPrice: Number(row.dataset.netPrice),
+                cumulativeUnits: null
+            };
+
+            updateEstimate();
+        });
+    });
+
     function clearSelectedRows(bookName) {
         document.querySelectorAll(`tr[data-book="${bookName}"]`).forEach(row => {
             row.classList.remove('table-primary');
@@ -243,26 +263,30 @@
 
     // Recalculate and display estimate after selected source/destination rows change.
     function updateEstimate() {
-        if (!selectedSourceSell || !selectedDestinationBuy) {
-            document.getElementById('selectionMessage').innerText = 'Select source sell and destination buy rows.';
+        if (!selectedSourceSell || !selectedDestination) {
+            document.getElementById('selectionMessage').innerText = 'Select source sell and destination buy/sell row.';
             return;
         }
 
-        const matchedUnits = Math.min(
-            selectedSourceSell.cumulativeUnits,
-            selectedDestinationBuy.cumulativeUnits);
+        const matchedUnits = selectedDestination.kind === 'buy'
+            ? Math.min(selectedSourceSell.cumulativeUnits, selectedDestination.cumulativeUnits)
+            : selectedSourceSell.cumulativeUnits;
 
         const matchedVolumeM3 = matchedUnits * unitVolumeM3;
-        const profitPerUnit = selectedDestinationBuy.netPrice - selectedSourceSell.price;
+        const profitPerUnit = selectedDestination.netPrice - selectedSourceSell.price;
         const totalProfit = matchedUnits * profitPerUnit;
         const roi = selectedSourceSell.price > 0 ? profitPerUnit / selectedSourceSell.price : 0;
         const profitPerM3 = matchedVolumeM3 > 0 ? totalProfit / matchedVolumeM3 : 0;
 
-        document.getElementById('selectionMessage').innerText = 'Estimate calculated from selected boundary rows.';
+        const destinationText = selectedDestination.kind === 'buy'
+            ? 'destination buy order after sales tax'
+            : 'destination sell listing after sales tax and broker fee';
+
+        document.getElementById('selectionMessage').innerText = `Estimate calculated using ${destinationText}.`;
         document.getElementById('estimateMatchedUnits').innerText = formatNumber(matchedUnits, 0);
         document.getElementById('estimateMatchedVolume').innerText = `${formatNumber(matchedVolumeM3, 2)} m3`;
         document.getElementById('estimateSourcePrice').innerText = formatNumber(selectedSourceSell.price, 2);
-        document.getElementById('estimateDestinationPrice').innerText = formatNumber(selectedDestinationBuy.netPrice, 2);
+        document.getElementById('estimateDestinationPrice').innerText = formatNumber(selectedDestination.netPrice, 2);
         document.getElementById('estimateProfitPerUnit').innerText = formatNumber(profitPerUnit, 2);
         document.getElementById('estimateTotalProfit').innerText = formatNumber(totalProfit, 2);
         document.getElementById('estimateRoi').innerText = formatPercent(roi);

@@ -1,6 +1,4 @@
-﻿using EveOnTrader.Core.StaticData;
-
-namespace EveOnTrader.Core.MarketImport;
+﻿namespace EveOnTrader.Core.MarketImport;
 
 // MarketOrderImportResult summarizes one market import run.
 public class MarketOrderImportResult
@@ -13,10 +11,13 @@ public class MarketOrderImportResult
     public int RequestCount { get; set; }
     public int NormalizedRequestCount { get; set; }
 
+    public int RegionsInserted { get; set; }
+    public int SolarSystemsInserted { get; set; }
+    public int MarketLocationsInserted { get; set; }
+    public int ItemTypeRefsInserted { get; set; }
+
     public long DeletedMarketOrderCount { get; set; }
     public long InsertedMarketOrderCount { get; set; }
-
-    public StaticDataResult? StaticDataResult { get; set; }
 
     public TimeSpan Elapsed { get; set; }
 

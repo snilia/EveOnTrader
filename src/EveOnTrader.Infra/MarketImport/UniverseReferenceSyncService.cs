@@ -248,7 +248,7 @@ public class UniverseReferenceSyncService
                     continue;
                 }
             }
-
+            //if not a station, or station details not found, add unknown structure
             locationsToInsert.Add(new MarketLocation
             {
                 LocationId = entry.LocationId,
@@ -259,6 +259,7 @@ public class UniverseReferenceSyncService
                 Kind = IsStationId(entry.LocationId)
                     ? MarketLocation.KindValue.Station
                     : MarketLocation.KindValue.UpwellStructure,
+                //public docking if station or public structure
                 HasPublicDocking = IsStationId(entry.LocationId)
                     ? true
                     : publicStructureIdSet.Contains(entry.LocationId)

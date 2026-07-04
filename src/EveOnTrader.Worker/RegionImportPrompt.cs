@@ -1,9 +1,9 @@
-﻿using EveOnTrader.Core.Models;
-using EveOnTrader.Worker.Models;
+﻿using EveOnTrader.Core.MarketImport;
+using EveOnTrader.Core.Models;
 
 namespace EveOnTrader.Worker;
 
-// RegionImportPrompt asks user for sell and buy region presets, then converts choices into import requests.
+// RegionImportPrompt asks user for sell and buy region presets, then converts choices into import request.
 public static class RegionImportPrompt
 {
     private static readonly RegionPreset[] Presets =
@@ -16,26 +16,26 @@ public static class RegionImportPrompt
         new("The Forge + Metropolis (Hek)", [10000002, 10000042])
     ];
 
-    // Shows sell and buy preset menus, then returns combined import requests.
-    public static MarketImportOptions Prompt(IReadOnlyList<Region> availableRegions)
+    // Shows sell and buy preset menus, then returns combined import request.
+    public static MarketOrderImportRequest Prompt(IReadOnlyList<Region> availableRegions)
     {
-        var sellSelection = PromptOrderSideSelection(availableRegions, "sell", false);
-        var buySelection = PromptOrderSideSelection(availableRegions, "buy", true);
+        var sellSelection = PromptOrderSideSelection(availableRegions, "sell", MarketOrderSide.Sell);
+        var buySelection = PromptOrderSideSelection(availableRegions, "buy", MarketOrderSide.Buy);
 
-        return new MarketImportOptions
+        return new MarketOrderImportRequest
         {
             SelectionName = $"Sell: {sellSelection.SelectionName} | Buy: {buySelection.SelectionName}",
-            Requests = sellSelection.Requests
-                .Concat(buySelection.Requests)
+            Slices = sellSelection.Slices
+                .Concat(buySelection.Slices)
                 .ToList()
         };
     }
 
-    // Shows preset menu for one order side and returns matching import requests.
+    // Shows preset menu for one order side and returns matching import slices.
     private static OrderSideSelection PromptOrderSideSelection(
         IReadOnlyList<Region> availableRegions,
         string orderLabel,
-        bool isBuyOrder)
+        MarketOrderSide side)
     {
         var availableRegionIds = availableRegions
             .Select(x => x.RegionId)
@@ -57,20 +57,20 @@ public static class RegionImportPrompt
 
             var input = (Console.ReadLine() ?? "").Trim();
 
-            //if no import option selected, return empty request list
+            //if no import option selected, return empty slice list
             if (input == "0")
             {
                 return new OrderSideSelection
                 {
                     SelectionName = "None",
-                    Requests = Array.Empty<OrderImportRequest>()
+                    Slices = []
                 };
             }
 
             //if manual option selected, prompt for region IDs and validate them
             if (input == "7")
             {
-                var manual = PromptManual(availableRegionIds, orderLabel, isBuyOrder);
+                var manual = PromptManual(availableRegionIds, orderLabel, side);
 
                 if (manual is not null)
                 {
@@ -97,11 +97,10 @@ public static class RegionImportPrompt
                     .OrderBy(x => x)
                     .ToList();
 
-                //wrap chosen preset into object runner can use later
                 return new OrderSideSelection
                 {
                     SelectionName = preset.Name,
-                    Requests = BuildRequests(regionIds, isBuyOrder)
+                    Slices = BuildSlices(regionIds, side)
                 };
             }
 
@@ -116,20 +115,19 @@ public static class RegionImportPrompt
                 continue;
             }
 
-            //wrap chosen preset into object runner can use later
             return new OrderSideSelection
             {
                 SelectionName = preset.Name,
-                Requests = BuildRequests(preset.RegionIds, isBuyOrder)
+                Slices = BuildSlices(preset.RegionIds, side)
             };
         }
     }
 
-    //prompts user for region IDs, validates them, and returns options object if valid
+    //prompts user for region IDs, validates them, and returns selection object if valid
     private static OrderSideSelection? PromptManual(
         HashSet<long> availableRegionIds,
         string orderLabel,
-        bool isBuyOrder)
+        MarketOrderSide side)
     {
         Console.Write($"Enter region IDs for {orderLabel} orders separated by commas: ");
         var input = (Console.ReadLine() ?? "").Trim();
@@ -174,28 +172,28 @@ public static class RegionImportPrompt
         return new OrderSideSelection
         {
             SelectionName = "Manual",
-            Requests = BuildRequests(regionIds, isBuyOrder)
+            Slices = BuildSlices(regionIds, side)
         };
     }
 
-    // Builds buy or sell import requests for given region IDs.
-    private static IReadOnlyList<OrderImportRequest> BuildRequests(IReadOnlyList<long> regionIds, bool isBuyOrder)
+    // Builds import slices for given region IDs and order side.
+    private static List<MarketOrderImportSlice> BuildSlices(IReadOnlyList<long> regionIds, MarketOrderSide side)
     {
         return regionIds
-            .Select(regionId => new OrderImportRequest
+            .Select(regionId => new MarketOrderImportSlice
             {
                 RegionId = regionId,
-                IsBuyOrder = isBuyOrder,
+                Side = side,
                 TypeId = null
             })
             .ToList();
     }
 
-    // OrderSideSelection stores one side's menu choice and resulting import requests.
+    // OrderSideSelection stores one side's menu choice and resulting import slices.
     private sealed class OrderSideSelection
     {
         public string SelectionName { get; set; } = "";
-        public IReadOnlyList<OrderImportRequest> Requests { get; set; } = Array.Empty<OrderImportRequest>();
+        public List<MarketOrderImportSlice> Slices { get; set; } = [];
     }
 
     // RegionPreset stores one menu preset name and region ID list.

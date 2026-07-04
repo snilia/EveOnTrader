@@ -1,4 +1,5 @@
 ﻿using EveOnTrader.Core.DealFinding.Models;
+using EveOnTrader.Core.MarketImport;
 
 namespace EveOnTrader.Web.Models;
 
@@ -68,4 +69,6 @@ public class MarketDealsSearchViewModel
     public MarketDealsSearchInputViewModel Input { get; set; } = new();
     public MarketDealsSearchResultViewModel Result { get; set; } = new();
     public string? ErrorMessage { get; set; }
+    public MarketOrderImportResult? RefreshResult { get; set; }
+    public string? RefreshMessage { get; set; }
 }

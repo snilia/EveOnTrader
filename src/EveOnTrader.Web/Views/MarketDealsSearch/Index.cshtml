@@ -22,10 +22,13 @@
     Current version = sell station/region to buy station.<br />
     Sell Stations/Regions = where you buy from sell orders.<br />
     Buy Stations = where you sell into buy orders.<br />
-    Sell regions expand into known market locations from imported data.
+    Sell regions expand into known market locations from imported data.<br />
+    Admin refresh only refreshes source sell region orders, not sell stations and not destination buy orders.
 </p>
 
 <form method="get" asp-action="Index" class="mb-4">
+    @Html.AntiForgeryToken()
+
     <div class="mb-3">
         <label class="form-label">Quick Routes To Jita</label><br />
         <button type="button" class="btn btn-outline-secondary btn-sm me-2 mb-2" onclick="setRoute('60011866', '60003760')">Dodixie -> Jita</button>
@@ -158,7 +161,34 @@
     </div>
 
     <button type="submit" class="btn btn-primary">Find Deals</button>
+
+    <button type="submit"
+            class="btn btn-warning ms-2"
+            asp-action="RefreshAndSubmit"
+            formmethod="post">
+        Admin refresh + Find Deals
+    </button>
 </form>
+
+@if (!string.IsNullOrWhiteSpace(Model.RefreshMessage))
+{
+    <div class="alert @(Model.RefreshResult is null ? "alert-warning" : "alert-success")">
+        @Model.RefreshMessage
+
+        @if (Model.RefreshResult is not null)
+        {
+            <div class="mt-2">
+                Deleted old source sell orders: @Model.RefreshResult.DeletedMarketOrderCount.ToString("N0")<br />
+                Inserted source sell orders: @Model.RefreshResult.InsertedMarketOrderCount.ToString("N0")<br />
+                New regions: @Model.RefreshResult.RegionsInserted.ToString("N0")<br />
+                New solar systems: @Model.RefreshResult.SolarSystemsInserted.ToString("N0")<br />
+                New market locations: @Model.RefreshResult.MarketLocationsInserted.ToString("N0")<br />
+                New item refs: @Model.RefreshResult.ItemTypeRefsInserted.ToString("N0")<br />
+                Elapsed: @Model.RefreshResult.Elapsed
+            </div>
+        }
+    </div>
+}
 
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
 {

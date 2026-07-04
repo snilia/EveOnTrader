@@ -1,5 +1,6 @@
 ﻿using EveOnTrader.Core.DealFinding.Models;
 using EveOnTrader.Core.DealFinding.Services;
+using EveOnTrader.Core.MarketImport;
 using EveOnTrader.Core.RouteFinding;
 using EveOnTrader.Web.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -10,16 +11,76 @@ namespace EveOnTrader.Web.Controllers;
 public class MarketDealsSearchController : Controller
 {
     private readonly MarketDealFinder _marketDealFinder;
+    private readonly IMarketOrderImportService _marketOrderImportService;
 
-    // Creates controller with market deal finder.
-    public MarketDealsSearchController(MarketDealFinder marketDealFinder)
+    // Creates controller with market deal finder and market import service.
+    public MarketDealsSearchController(
+        MarketDealFinder marketDealFinder,
+        IMarketOrderImportService marketOrderImportService)
     {
         _marketDealFinder = marketDealFinder;
+        _marketOrderImportService = marketOrderImportService;
     }
 
     // GET: /MarketDealsSearch
     // Loads chosen sell stations/regions and buy stations, runs market deal search, and shows best step per item.
+    [HttpGet]
     public async Task<IActionResult> Index([FromQuery] MarketDealsSearchViewModel model)
+    {
+        await RunSearchAsync(model);
+        return View(model);
+    }
+
+    // POST: /MarketDealsSearch/RefreshAndSubmit
+    // Refreshes source sell-region orders, then runs same search.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RefreshAndSubmit(MarketDealsSearchViewModel model)
+    {
+        NormalizeModel(model.Input);
+
+        var sellRegionIds = ParseIds(model.Input.SellRegionIdsText, out var invalidSellRegionIds);
+
+        if (invalidSellRegionIds.Count > 0)
+        {
+            model.RefreshMessage = $"Admin refresh skipped. Invalid sell region IDs: {string.Join(", ", invalidSellRegionIds)}.";
+        }
+        else if (sellRegionIds.Count == 0)
+        {
+            model.RefreshMessage = "Admin refresh skipped. Enter at least one sell region. Sell stations are not refreshed.";
+        }
+        else
+        {
+            var importRequest = new MarketOrderImportRequest
+            {
+                SelectionName = "Admin refresh source sell regions",
+                Slices = sellRegionIds
+                    .Select(regionId => new MarketOrderImportSlice
+                    {
+                        RegionId = regionId,
+                        Side = MarketOrderSide.Sell,
+                        TypeId = null
+                    })
+                    .ToList()
+            };
+
+            try
+            {
+                model.RefreshResult = await _marketOrderImportService.ImportAsync(importRequest);
+                model.RefreshMessage = $"Admin refresh done. Inserted {model.RefreshResult.InsertedMarketOrderCount:n0} source sell orders.";
+            }
+            catch (Exception ex)
+            {
+                model.RefreshMessage = $"Admin refresh failed: {ex.Message}";
+            }
+        }
+
+        await RunSearchAsync(model);
+        return View("Index", model);
+    }
+
+    // RunSearchAsync validates inputs, runs deal search, and fills result rows.
+    private async Task RunSearchAsync(MarketDealsSearchViewModel model)
     {
         NormalizeModel(model.Input);
 
@@ -31,7 +92,6 @@ public class MarketDealsSearchController : Controller
         model.Result.SellRegionCount = sellRegionIds.Count;
         model.Result.BuyStationCount = buyStationIds.Count;
 
-
         if (invalidSellStationIds.Count > 0 || invalidSellRegionIds.Count > 0 || invalidBuyStationIds.Count > 0)
         {
             model.ErrorMessage = BuildInvalidIdMessage(
@@ -42,7 +102,7 @@ public class MarketDealsSearchController : Controller
 
         if (!HasAnySearchInput(model.Input))
         {
-            return View(model);
+            return;
         }
 
         if (sellStationIds.Count == 0 && sellRegionIds.Count == 0)
@@ -51,7 +111,7 @@ public class MarketDealsSearchController : Controller
                 model.ErrorMessage,
                 "Enter at least one sell station or sell region.");
 
-            return View(model);
+            return;
         }
 
         if (buyStationIds.Count == 0)
@@ -60,7 +120,7 @@ public class MarketDealsSearchController : Controller
                 model.ErrorMessage,
                 "Enter at least one buy station.");
 
-            return View(model);
+            return;
         }
 
         var options = new DealFinderOptions
@@ -90,8 +150,6 @@ public class MarketDealsSearchController : Controller
             .ThenBy(x => x.BuyStationName)
             .ThenBy(x => x.TypeId)
             .ToList();
-
-        return View(model);
     }
 
     // MapRouteResultRows maps route deal result items into display rows.

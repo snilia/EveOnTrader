@@ -17,9 +17,19 @@ var connStr = $"Data Source={dbPath}";
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Avoid spamming SQL/HTTP logs during large imports.
+// Show import progress from Infra, but hide noisy EF/HTTP internals.
+builder.Logging.ClearProviders();
+
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.SingleLine = true;
+    options.TimestampFormat = "HH:mm:ss ";
+});
+
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+builder.Logging.AddFilter("EveOnTrader.Infra", LogLevel.Information);
 
 // Register Infra.
 builder.Services.AddInfra(connStr);

@@ -8,28 +8,28 @@ public class MarketDealFinder
 {
     private readonly IRegionToLocationsQuery _regionToLocationsQuery;
     private readonly IMultiLocationMarketOrderQuery _multiLocationMarketOrderQuery;
-    private readonly IBulkDistanceFinder _bulkDistanceFinder;
+    private readonly IStationDistanceFinder _stationDistanceFinder;
     private readonly StationToStationMarketOrdersBuilder _stationToStationMarketOrdersBuilder;
     private readonly StationToStationDealFinder _stationToStationDealFinder;
 
-    // Creates market deal finder with queries, builders, and station-to-station deal finder.
+    // Creates market deal finder with queries, builders, distance finder, and station-to-station deal finder.
     public MarketDealFinder(
         IRegionToLocationsQuery regionToLocationsQuery, //turns source region IDs into station/location IDs
         IMultiLocationMarketOrderQuery multiLocationMarketOrderQuery, //loads all source sell orders and destination buy orders in bulk
-        IBulkDistanceFinder bulkDistanceFinder, //gets jump counts for all source/destination station pairs
+        IStationDistanceFinder stationDistanceFinder, //gets jump counts for all source/destination station pairs
         StationToStationMarketOrdersBuilder stationToStationMarketOrdersBuilder, //turns bulk orders into route objects
         StationToStationDealFinder stationToStationDealFinder) //finds deals for one source/destination station pair
     {
         _regionToLocationsQuery = regionToLocationsQuery;
         _multiLocationMarketOrderQuery = multiLocationMarketOrderQuery;
-        _bulkDistanceFinder = bulkDistanceFinder;
+        _stationDistanceFinder = stationDistanceFinder;
         _stationToStationMarketOrdersBuilder = stationToStationMarketOrdersBuilder;
         _stationToStationDealFinder = stationToStationDealFinder;
     }
 
     // FindDealsAsync finds all station-to-station deal results for every source/destination location pair.
     public async Task<List<RouteDealResult>> FindDealsAsync(
-        List<long> sourceLocationIds, 
+        List<long> sourceLocationIds,
         List<long> sourceRegionIds,
         List<long> destinationLocationIds,
         RouteSecurityPreference routeSecurityPreference,
@@ -59,7 +59,7 @@ public class MarketDealFinder
             distinctDestinationLocationIds,
             importedAfterUtc);
 
-        var jumpCounts = await _bulkDistanceFinder.GetJumpCountsAsync(
+        var jumpCounts = await _stationDistanceFinder.GetJumpCountsAsync(
             distinctSourceLocationIds,
             distinctDestinationLocationIds,
             routeSecurityPreference);

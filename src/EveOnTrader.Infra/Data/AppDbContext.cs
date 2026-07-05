@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Region> Regions => Set<Region>();
     public DbSet<SolarSystem> SolarSystems => Set<SolarSystem>();
     public DbSet<MarketLocation> MarketLocations => Set<MarketLocation>();
+    public DbSet<SystemDistanceCache> SystemDistanceCaches => Set<SystemDistanceCache>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,5 +75,16 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.SolarSystemId);
         });
 
+        modelBuilder.Entity<SystemDistanceCache>(e =>
+        {
+            e.HasKey(x => new
+            {
+                x.SourceSolarSystemId,
+                x.DestinationSolarSystemId,
+                x.SecurityPreference
+            });
+
+            e.HasIndex(x => x.ResolvedAtUtc);
+        });
     }
 }

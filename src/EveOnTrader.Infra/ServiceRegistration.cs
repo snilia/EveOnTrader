@@ -35,6 +35,7 @@ public static class ServiceRegistration
 
         services.AddScoped<EsiMarketClient>();
         services.AddScoped<EsiUniverseClient>();
+        services.AddScoped<EsiDistanceClient>();
 
         services.AddScoped<UniverseReferenceSyncService>();
         services.AddScoped<ItemTypeRefSyncService>();
@@ -48,8 +49,7 @@ public static class ServiceRegistration
         services.AddScoped<IRegionToLocationsQuery, RegionToLocationsQuery>();
         services.AddScoped<IMultiLocationMarketOrderQuery, MultiLocationMarketOrderQuery>();
         services.AddScoped<ISingleItemStationToStationQuery, SingleItemStationToStationQuery>();
-        services.AddScoped<IRouteDistanceService, RouteDistanceService>();
-        services.AddScoped<IBulkDistanceFinder, BulkDistanceFinder>();
+        services.AddScoped<IStationDistanceFinder, StationDistanceFinder>();
 
         return services;
     }

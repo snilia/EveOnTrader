@@ -72,6 +72,7 @@ public class MarketDealsSearchController : Controller
             catch (Exception ex)
             {
                 model.RefreshMessage = $"Admin refresh failed: {ex.Message}";
+                return View("Index", model);
             }
         }
 

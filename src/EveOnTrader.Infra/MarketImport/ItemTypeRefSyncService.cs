@@ -84,18 +84,94 @@ public class ItemTypeRefSyncService
             }
         }
 
-        if (refsToInsert.Count == 0)
+        var refsStillMissing = await GetRefsStillMissingAsync(
+            refsToInsert,
+            cancellationToken);
+
+        if (refsStillMissing.Count == 0)
         {
-            _logger.LogInformation("ESI returned no new item type refs.");
+            _logger.LogInformation("No new item type refs still missing after final DB check.");
             return 0;
         }
 
-        _db.ItemTypeRefs.AddRange(refsToInsert);
-        await _db.SaveChangesAsync(cancellationToken);
-        _db.ChangeTracker.Clear();
+        var insertedCount = await InsertRefsWithRetryAsync(
+            refsStillMissing,
+            cancellationToken);
 
-        _logger.LogInformation("Inserted {InsertedCount:n0} new ItemTypeRef rows.", refsToInsert.Count);
-        return refsToInsert.Count;
+        _logger.LogInformation("Inserted {InsertedCount:n0} new ItemTypeRef rows.", insertedCount);
+        return insertedCount;
+    }
+
+    // InsertRefsWithRetryAsync inserts refs, clears failed tracked entities on duplicate races, and retries remaining refs once.
+    private async Task<int> InsertRefsWithRetryAsync(
+        List<ItemTypeRef> refsToInsert,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _db.ItemTypeRefs.AddRange(refsToInsert);
+            await _db.SaveChangesAsync(cancellationToken);
+            _db.ChangeTracker.Clear();
+
+            return refsToInsert.Count;
+        }
+        catch (DbUpdateException)
+        {
+            _db.ChangeTracker.Clear();
+
+            var remainingRefs = await GetRefsStillMissingAsync(
+                refsToInsert,
+                cancellationToken);
+
+            if (remainingRefs.Count == 0)
+            {
+                _logger.LogInformation("Item type refs were inserted by another import before retry.");
+                return 0;
+            }
+
+            try
+            {
+                _db.ItemTypeRefs.AddRange(remainingRefs);
+                await _db.SaveChangesAsync(cancellationToken);
+                _db.ChangeTracker.Clear();
+
+                return remainingRefs.Count;
+            }
+            catch
+            {
+                _db.ChangeTracker.Clear();
+                throw;
+            }
+        }
+    }
+
+    // GetRefsStillMissingAsync removes duplicate refs and filters out refs inserted by another import while ESI calls were running.
+    private async Task<List<ItemTypeRef>> GetRefsStillMissingAsync(
+        List<ItemTypeRef> refsToInsert,
+        CancellationToken cancellationToken)
+    {
+        var uniqueRefs = refsToInsert
+            .GroupBy(x => x.TypeId)
+            .Select(x => x.First())
+            .ToList();
+
+        if (uniqueRefs.Count == 0)
+        {
+            return [];
+        }
+
+        var typeIds = uniqueRefs
+            .Select(x => x.TypeId)
+            .ToList();
+
+        var existingTypeIds = await _db.ItemTypeRefs
+            .Where(x => typeIds.Contains(x.TypeId))
+            .Select(x => x.TypeId)
+            .ToHashSetAsync(cancellationToken);
+
+        return uniqueRefs
+            .Where(x => !existingTypeIds.Contains(x.TypeId))
+            .ToList();
     }
 
     // GetMarketVolumeM3 returns packaged volume when ESI provides it, otherwise normal type volume.

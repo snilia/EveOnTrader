@@ -226,9 +226,17 @@ public class StationDistanceFinder : IStationDistanceFinder
 
         if (cacheRows.Count > 0)
         {
-            _db.SystemDistanceCaches.AddRange(cacheRows);
-            await _db.SaveChangesAsync();
-            _db.ChangeTracker.Clear();
+            try
+            {
+                _db.SystemDistanceCaches.AddRange(cacheRows);
+                await _db.SaveChangesAsync();
+                _db.ChangeTracker.Clear();
+            }
+            catch
+            {
+                _db.ChangeTracker.Clear();
+                throw;
+            }
         }
 
         return results;

@@ -8,6 +8,8 @@ namespace EveOnTrader.Infra.MarketImport;
 // MarketOrderImportService coordinates one full ESI market import run.
 public class MarketOrderImportService : IMarketOrderImportService
 {
+    private static readonly SemaphoreSlim ImportGate = new(1, 1);
+
     private readonly EsiMarketClient _esiMarketClient;
     private readonly MarketOrderImportWriter _marketOrderImportWriter;
     private readonly UniverseReferenceSyncService _universeReferenceSyncService;
@@ -36,6 +38,26 @@ public class MarketOrderImportService : IMarketOrderImportService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (!await ImportGate.WaitAsync(0, cancellationToken))
+        {
+            throw new InvalidOperationException("Market import already running. Wait for it to finish.");
+        }
+
+        try
+        {
+            return await ImportCoreAsync(request, cancellationToken);
+        }
+        finally
+        {
+            ImportGate.Release();
+        }
+    }
+
+    // ImportCoreAsync runs actual import after process-wide import gate is acquired.
+    private async Task<MarketOrderImportResult> ImportCoreAsync(
+        MarketOrderImportRequest request,
+        CancellationToken cancellationToken)
+    {
         var sw = Stopwatch.StartNew();
         var importBatchId = Guid.NewGuid();
         var importedAtUtc = DateTime.UtcNow;

@@ -146,7 +146,8 @@ public class MarketDealsSearchController : Controller
 
         model.Result.Rows = routeResults
             .SelectMany(MapRouteResultRows)
-            .OrderByDescending(x => x.TotalProfit)
+            .OrderByDescending(x => x.TotalProfitPerJump)
+            .ThenByDescending(x => x.TotalProfit)
             .ThenBy(x => x.SellStationName)
             .ThenBy(x => x.BuyStationName)
             .ThenBy(x => x.TypeId)

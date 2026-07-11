@@ -1,21 +1,19 @@
 ﻿using EveOnTrader.Core.MarketImport;
 using EveOnTrader.Infra;
+using EveOnTrader.Infra.Data;
 using EveOnTrader.Worker;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-const string dbFolderName = "EveOnTrader";
-
-var dataDir = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    dbFolderName);
-Directory.CreateDirectory(dataDir);
-
-var dbPath = Path.Combine(dataDir, "eve.db");
-var connStr = $"Data Source={dbPath}";
-
 var builder = Host.CreateApplicationBuilder(args);
+
+var connectionString = builder.Configuration
+    .GetConnectionString("EveDatabase")
+    ?? throw new InvalidOperationException(
+        "Connection string 'EveDatabase' is not configured.");
 
 // Show import progress from Infra, but hide noisy EF/HTTP internals.
 builder.Logging.ClearProviders();
@@ -32,15 +30,17 @@ builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
 builder.Logging.AddFilter("EveOnTrader.Infra", LogLevel.Information);
 
 // Register Infra.
-builder.Services.AddInfra(connStr);
+builder.Services.AddInfra(connectionString);
 
 using var host = builder.Build();
 using var scope = host.Services.CreateScope();
 
+var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+await db.Database.EnsureCreatedAsync();
+
 var regionCatalogQuery = scope.ServiceProvider.GetRequiredService<IRegionCatalogQuery>();
 var marketOrderImportService = scope.ServiceProvider.GetRequiredService<IMarketOrderImportService>();
 
-Console.WriteLine($"DB Path: {dbPath}");
 Console.WriteLine("Loading regions...");
 
 var regions = await regionCatalogQuery.GetRegionsAsync();

@@ -14,10 +14,10 @@ namespace EveOnTrader.Infra;
 
 public static class ServiceRegistration
 {
-    public static IServiceCollection AddInfra(this IServiceCollection services, string sqliteConnectionString)
+    public static IServiceCollection AddInfra(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite(sqliteConnectionString));
+            options.UseNpgsql(connectionString));
 
         services.AddHttpClient<EsiHttpClient>(client =>
         {

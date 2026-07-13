@@ -1,0 +1,88 @@
+name: eveontrader
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-eveontrader}"
+      POSTGRES_USER: "${POSTGRES_USER:-eveontrader}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-eveontrader} -d ${POSTGRES_DB:-eveontrader}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: eveontrader-web:local
+
+    build:
+      context: .
+      dockerfile: src/EveOnTrader.Web/Dockerfile
+
+    restart: unless-stopped
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__EveDatabase: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-eveontrader};Username=${POSTGRES_USER:-eveontrader};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    image: eveontrader-worker:local
+
+    build:
+      context: .
+      dockerfile: src/EveOnTrader.Worker/Dockerfile
+
+    profiles:
+      - manual
+
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__EveDatabase: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-eveontrader};Username=${POSTGRES_USER:-eveontrader};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    stdin_open: true
+    tty: true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres-data:

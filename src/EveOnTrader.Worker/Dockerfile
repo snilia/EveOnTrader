@@ -23,6 +23,7 @@ FROM mcr.microsoft.com/dotnet/runtime:9.0 AS final
 WORKDIR /app
 
 COPY --from=build /app/publish .
+COPY ["deploy/aws/aws-rds-global-bundle.pem", "/app/certs/aws-rds-global-bundle.pem"]
 
 USER $APP_UID
 

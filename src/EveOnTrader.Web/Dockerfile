@@ -27,6 +27,7 @@ ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 
 COPY --from=build /app/publish .
+COPY ["deploy/aws/aws-rds-global-bundle.pem", "/app/certs/aws-rds-global-bundle.pem"]
 
 USER $APP_UID
 

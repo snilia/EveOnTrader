@@ -1,6 +1,5 @@
 ﻿using EveOnTrader.Core.DealFinding.Models;
 using EveOnTrader.Core.DealFinding.Services;
-using EveOnTrader.Core.MarketImport;
 using EveOnTrader.Core.RouteFinding;
 using EveOnTrader.Web.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -11,15 +10,11 @@ namespace EveOnTrader.Web.Controllers;
 public class MarketDealsSearchController : Controller
 {
     private readonly MarketDealFinder _marketDealFinder;
-    private readonly IMarketOrderImportService _marketOrderImportService;
 
-    // Creates controller with market deal finder and market import service.
-    public MarketDealsSearchController(
-        MarketDealFinder marketDealFinder,
-        IMarketOrderImportService marketOrderImportService)
+    // Creates controller with market deal finder.
+    public MarketDealsSearchController(MarketDealFinder marketDealFinder)
     {
         _marketDealFinder = marketDealFinder;
-        _marketOrderImportService = marketOrderImportService;
     }
 
     // GET: /MarketDealsSearch
@@ -31,54 +26,6 @@ public class MarketDealsSearchController : Controller
         return View(model);
     }
 
-    // POST: /MarketDealsSearch/RefreshAndSubmit
-    // Refreshes source sell-region orders, then runs same search.
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RefreshAndSubmit(MarketDealsSearchViewModel model)
-    {
-        NormalizeModel(model.Input);
-
-        var sellRegionIds = ParseIds(model.Input.SellRegionIdsText, out var invalidSellRegionIds);
-
-        if (invalidSellRegionIds.Count > 0)
-        {
-            model.RefreshMessage = $"Admin refresh skipped. Invalid sell region IDs: {string.Join(", ", invalidSellRegionIds)}.";
-        }
-        else if (sellRegionIds.Count == 0)
-        {
-            model.RefreshMessage = "Admin refresh skipped. Enter at least one sell region. Sell stations are not refreshed.";
-        }
-        else
-        {
-            var importRequest = new MarketOrderImportRequest
-            {
-                SelectionName = "Admin refresh source sell regions",
-                Slices = sellRegionIds
-                    .Select(regionId => new MarketOrderImportSlice
-                    {
-                        RegionId = regionId,
-                        Side = MarketOrderSide.Sell,
-                        TypeId = null
-                    })
-                    .ToList()
-            };
-
-            try
-            {
-                model.RefreshResult = await _marketOrderImportService.ImportAsync(importRequest);
-                model.RefreshMessage = $"Admin refresh done. Inserted {model.RefreshResult.InsertedMarketOrderCount:n0} source sell orders.";
-            }
-            catch (Exception ex)
-            {
-                model.RefreshMessage = $"Admin refresh failed: {ex.Message}";
-                return View("Index", model);
-            }
-        }
-
-        await RunSearchAsync(model);
-        return View("Index", model);
-    }
 
     // RunSearchAsync validates inputs, runs deal search, and fills result rows.
     private async Task RunSearchAsync(MarketDealsSearchViewModel model)

@@ -1,0 +1,41 @@
+{
+  "family": "eveontrader-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::774126906739:role/EveOnTraderEcsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "worker",
+      "image": "774126906739.dkr.ecr.eu-central-1.amazonaws.com/eveontrader-worker:bootstrap",
+      "essential": true,
+      "environment": [
+        {
+          "name": "DOTNET_ENVIRONMENT",
+          "value": "Production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "ConnectionStrings__EveDatabase",
+          "valueFrom": "arn:aws:ssm:eu-central-1:774126906739:parameter/eveontrader/prod/connection-string"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/eveontrader/worker",
+          "awslogs-region": "eu-central-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

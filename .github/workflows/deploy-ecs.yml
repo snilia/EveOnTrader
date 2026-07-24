@@ -1,0 +1,218 @@
+name: Deploy EveOnTrader to ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_web:
+        description: Update existing ECS Web service
+        required: true
+        default: false
+        type: boolean
+      update_worker_schedule:
+        description: Update existing Worker schedule
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: eveontrader-ecs-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  IMAGE_TAG: ${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
+  WEB_TASK_DEFINITION: deploy/aws/ecs/web-task-definition.json
+  WORKER_TASK_DEFINITION: deploy/aws/ecs/worker-task-definition.json
+
+jobs:
+  deploy:
+    name: Build, publish, and register
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: EveOnTraderGitHub-${{ github.run_id }}
+
+      - name: Log in to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Web and Worker images
+        id: build_images
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.login_ecr.outputs.registry }}
+          WEB_REPOSITORY: ${{ vars.ECR_WEB_REPOSITORY }}
+          WORKER_REPOSITORY: ${{ vars.ECR_WORKER_REPOSITORY }}
+        run: |
+          set -euo pipefail
+
+          WEB_IMAGE="$ECR_REGISTRY/$WEB_REPOSITORY:$IMAGE_TAG"
+          WORKER_IMAGE="$ECR_REGISTRY/$WORKER_REPOSITORY:$IMAGE_TAG"
+
+          docker build \
+            --platform linux/amd64 \
+            --file src/EveOnTrader.Web/Dockerfile \
+            --tag "$WEB_IMAGE" \
+            .
+
+          docker build \
+            --platform linux/amd64 \
+            --file src/EveOnTrader.Worker/Dockerfile \
+            --tag "$WORKER_IMAGE" \
+            .
+
+          docker push "$WEB_IMAGE"
+          docker push "$WORKER_IMAGE"
+
+          echo "web_image=$WEB_IMAGE" >> "$GITHUB_OUTPUT"
+          echo "worker_image=$WORKER_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Render Web task definition
+        id: render_web
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.WEB_TASK_DEFINITION }}
+          container-name: web
+          image: ${{ steps.build_images.outputs.web_image }}
+
+      - name: Render Worker task definition
+        id: render_worker
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.WORKER_TASK_DEFINITION }}
+          container-name: worker
+          image: ${{ steps.build_images.outputs.worker_image }}
+
+      - name: Register Web task definition
+        id: register_web
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.render_web.outputs.task-definition }}" \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Register Worker task definition
+        id: register_worker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.render_worker.outputs.task-definition }}" \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Web service
+        if: ${{ inputs.deploy_web }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          aws ecs update-service \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_WEB_SERVICE }}" \
+            --task-definition "${{ steps.register_web.outputs.task_definition_arn }}" \
+            --force-new-deployment \
+            > /dev/null
+
+          aws ecs wait services-stable \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --services "${{ vars.ECS_WEB_SERVICE }}"
+
+      - name: Update Worker schedule
+        if: ${{ inputs.update_worker_schedule }}
+        shell: bash
+        env:
+          WORKER_TASK_DEFINITION_ARN: ${{ steps.register_worker.outputs.task_definition_arn }}
+        run: |
+          set -euo pipefail
+
+          aws scheduler get-schedule \
+            --group-name "${{ vars.WORKER_SCHEDULE_GROUP }}" \
+            --name "${{ vars.WORKER_SCHEDULE_NAME }}" \
+            > current-schedule.json
+
+          jq --arg task_definition_arn "$WORKER_TASK_DEFINITION_ARN" '
+            {
+              Name: .Name,
+              GroupName: .GroupName,
+              ScheduleExpression: .ScheduleExpression,
+              FlexibleTimeWindow: .FlexibleTimeWindow,
+              State: .State,
+              Target: (
+                .Target
+                | .EcsParameters.TaskDefinitionArn = $task_definition_arn
+              )
+            }
+            + (
+                if .ActionAfterCompletion != null
+                then {ActionAfterCompletion: .ActionAfterCompletion}
+                else {}
+                end
+              )
+            + (
+                if .Description != null
+                then {Description: .Description}
+                else {}
+                end
+              )
+            + (
+                if .EndDate != null
+                then {EndDate: .EndDate}
+                else {}
+                end
+              )
+            + (
+                if .KmsKeyArn != null
+                then {KmsKeyArn: .KmsKeyArn}
+                else {}
+                end
+              )
+            + (
+                if .ScheduleExpressionTimezone != null
+                then {ScheduleExpressionTimezone: .ScheduleExpressionTimezone}
+                else {}
+                end
+              )
+            + (
+                if .StartDate != null
+                then {StartDate: .StartDate}
+                else {}
+                end
+              )
+          ' current-schedule.json > update-schedule.json
+
+          aws scheduler update-schedule \
+            --cli-input-json file://update-schedule.json \
+            > /dev/null
+
+      - name: Show registered revisions
+        shell: bash
+        run: |
+          echo "Web image: ${{ steps.build_images.outputs.web_image }}"
+          echo "Worker image: ${{ steps.build_images.outputs.worker_image }}"
+          echo "Web task: ${{ steps.register_web.outputs.task_definition_arn }}"
+          echo "Worker task: ${{ steps.register_worker.outputs.task_definition_arn }}"
+          echo "Web deployed: ${{ inputs.deploy_web }}"
+          echo "Worker schedule updated: ${{ inputs.update_worker_schedule }}"
